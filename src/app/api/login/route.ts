@@ -178,6 +178,31 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // 检查用户是否已过期
+      try {
+        const storage = db.storage;
+        if (storage && typeof storage.getUserExpiryTime === 'function') {
+          const expiryTime = await storage.getUserExpiryTime(username);
+          if (expiryTime) {
+            const now = new Date();
+            const expiry = new Date(expiryTime);
+            if (now > expiry) {
+              return NextResponse.json(
+                { 
+                  error: '您的账户已过期，无法登录。请联系站长续期。',
+                  expired: true 
+                },
+                { status: 401 }
+              );
+            }
+          }
+        }
+      } catch (expiryCheckError) {
+        console.error('检查用户到期时间失败:', expiryCheckError);
+        // 如果检查到期时间失败，记录错误但不阻止登录
+        // 这样可以避免因为到期时间功能问题导致所有用户无法登录
+      }
+
       // 验证成功，设置认证cookie
       const response = NextResponse.json({ ok: true });
       const cookieValue = await generateAuthCookie(

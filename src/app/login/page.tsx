@@ -112,7 +112,14 @@ function LoginPageClient() {
         const redirect = searchParams.get('redirect') || '/';
         router.replace(redirect);
       } else if (res.status === 401) {
-        setError('密码错误');
+        const data = await res.json().catch(() => ({}));
+        if (data.expired) {
+          // 用户账户已过期
+          setError(data.error || '您的账户已过期，无法登录。请联系站长续期。');
+        } else {
+          // 普通的认证错误
+          setError(data.error || '用户名或密码错误');
+        }
       } else {
         const data = await res.json().catch(() => ({}));
         setError(data.error ?? '服务器错误');

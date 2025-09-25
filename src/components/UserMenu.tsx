@@ -59,6 +59,42 @@ export const UserMenu: React.FC = () => {
     }
   }, []);
 
+  // 定期检查用户状态（是否过期）
+  useEffect(() => {
+    if (!authInfo?.username || storageType === 'localstorage') {
+      return; // 本地存储模式不需要检查到期时间
+    }
+
+    const checkUserStatus = async () => {
+      try {
+        const response = await fetch('/api/user/status');
+        if (response.status === 403) {
+          // 用户已过期
+          const data = await response.json();
+          alert(data.message || '您的账户已过期，请联系站长续期。');
+          // 清除认证信息并跳转到登录页
+          document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+          window.location.href = '/login';
+        } else if (response.status === 401) {
+          // 认证失败，跳转到登录页
+          window.location.href = '/login';
+        }
+        // 其他情况（200, 500等）不做处理，让用户继续使用
+      } catch (error) {
+        console.error('检查用户状态失败:', error);
+        // 网络错误等情况不做处理，避免影响用户体验
+      }
+    };
+
+    // 立即检查一次
+    checkUserStatus();
+
+    // 每5分钟检查一次用户状态
+    const interval = setInterval(checkUserStatus, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [authInfo?.username, storageType]);
+
   // 从 localStorage 读取设置
   useEffect(() => {
     if (typeof window !== 'undefined') {
