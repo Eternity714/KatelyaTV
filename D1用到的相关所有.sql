@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS db_version (
 
 -- 初始化版本信息（如果不存在）
 INSERT OR IGNORE INTO db_version (id, version, description) 
-VALUES (1, '1.0.0', '初始数据库结构');
+VALUES (1, '1.2.0', '初始数据库结构，包含用户到期时间功能');
 
 -- =============================================
 -- 第二部分：核心表结构定义
@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT UNIQUE NOT NULL,
   password TEXT NOT NULL,
+  expires_at DATETIME DEFAULT NULL, -- 用户到期时间，NULL表示永不过期
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -132,6 +133,7 @@ CREATE TABLE IF NOT EXISTS admin_configs (
 
 -- 用户表索引
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_expires_at ON users(expires_at);
 
 -- 用户设置索引
 CREATE INDEX IF NOT EXISTS idx_user_settings_username ON user_settings(username);
@@ -209,7 +211,7 @@ VALUES ('main_config',
 */
 
 -- 更新版本信息
-UPDATE db_version SET version = '1.1.0', description = '完成数据迁移' WHERE id = 1;
+UPDATE db_version SET version = '1.2.0', description = '完成数据迁移，包含用户到期时间功能' WHERE id = 1;
 
 -- =============================================
 -- 第七部分：实用查询
