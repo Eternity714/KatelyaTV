@@ -12,7 +12,7 @@ import { checkForUpdates, CURRENT_VERSION, UpdateStatus } from '@/lib/version';
 
 interface AuthInfo {
   username?: string;
-  role?: 'owner' | 'admin' | 'user';
+  role?: 'owner' | 'admin' | 'vip' | 'user';
 }
 
 interface UserStatus {
@@ -371,6 +371,8 @@ export const UserMenu: React.FC = () => {
         return '站长';
       case 'admin':
         return '管理员';
+      case 'vip':
+        return 'VIP用户';
       case 'user':
         return '用户';
       default:

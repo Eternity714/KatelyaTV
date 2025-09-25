@@ -104,6 +104,8 @@ const ACTIONS = [
   'unban',
   'setAdmin',
   'cancelAdmin',
+  'setVip',
+  'cancelVip',
   'setAllowRegister',
   'changePassword',
   'deleteUser',
@@ -324,6 +326,40 @@ export async function POST(request: NextRequest) {
           targetEntry.role = 'user';
           break;
         }
+        case 'setVip': {
+          if (!targetEntry) {
+            return NextResponse.json(
+              { error: '目标用户不存在' },
+              { status: 404 }
+            );
+          }
+          if (targetEntry.role !== 'user') {
+            return NextResponse.json(
+              { error: '只能将普通用户设为VIP用户' },
+              { status: 400 }
+            );
+          }
+          // 管理员和站长都可以设置VIP用户
+          targetEntry.role = 'vip';
+          break;
+        }
+        case 'cancelVip': {
+          if (!targetEntry) {
+            return NextResponse.json(
+              { error: '目标用户不存在' },
+              { status: 404 }
+            );
+          }
+          if (targetEntry.role !== 'vip') {
+            return NextResponse.json(
+              { error: '目标用户不是VIP用户' },
+              { status: 400 }
+            );
+          }
+          // 管理员和站长都可以取消VIP用户
+          targetEntry.role = 'user';
+          break;
+        }
         case 'changePassword': {
           if (!targetEntry) {
             return NextResponse.json(
@@ -414,7 +450,7 @@ export async function POST(request: NextRequest) {
             );
           }
 
-          // 权限检查：站长可设置所有用户的到期时间，管理员可设置普通用户的到期时间
+          // 权限检查：站长可设置所有用户的到期时间，管理员可设置普通用户和VIP用户的到期时间
           if (isTargetAdmin && operatorRole !== 'owner') {
             return NextResponse.json(
               { error: '仅站长可设置管理员的到期时间' },

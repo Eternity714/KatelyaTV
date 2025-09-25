@@ -201,6 +201,14 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
     await handleUserAction('cancelAdmin', uname);
   };
 
+  const handleSetVip = async (uname: string) => {
+    await handleUserAction('setVip', uname);
+  };
+
+  const handleRemoveVip = async (uname: string) => {
+    await handleUserAction('cancelVip', uname);
+  };
+
   const handleAddUser = async () => {
     if (!newUser.username || !newUser.password) return;
     await handleUserAction('add', newUser.username, newUser.password);
@@ -573,7 +581,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                 </th>
               </tr>
             </thead>
-            {/* 按规则排序用户：自己 -> 站长(若非自己) -> 管理员 -> 其他 */}
+            {/* 按规则排序用户：自己 -> 站长(若非自己) -> 管理员 -> VIP用户 -> 普通用户 */}
             {(() => {
               const sortedUsers = [...config.UserConfig.Users].sort((a, b) => {
                 type UserInfo = (typeof config.UserConfig.Users)[number];
@@ -581,32 +589,33 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                   if (u.username === currentUsername) return 0;
                   if (u.role === 'owner') return 1;
                   if (u.role === 'admin') return 2;
-                  return 3;
+                  if (u.role === 'vip') return 3;
+                  return 4;
                 };
                 return priority(a) - priority(b);
               });
               return (
                 <tbody className='divide-y divide-gray-200 dark:divide-gray-700'>
                   {sortedUsers.map((user) => {
-                    // 修改密码权限：站长可修改管理员和普通用户密码，管理员可修改普通用户和自己的密码，但任何人都不能修改站长密码
+                    // 修改密码权限：站长可修改管理员和普通用户密码，管理员可修改普通用户、VIP用户和自己的密码，但任何人都不能修改站长密码
                     const canChangePassword =
                       user.role !== 'owner' && // 不能修改站长密码
                       (role === 'owner' || // 站长可以修改管理员和普通用户密码
                         (role === 'admin' &&
-                          (user.role === 'user' ||
-                            user.username === currentUsername))); // 管理员可以修改普通用户和自己的密码
+                          (user.role === 'user' || user.role === 'vip' ||
+                            user.username === currentUsername))); // 管理员可以修改普通用户、VIP用户和自己的密码
 
-                    // 删除用户权限：站长可删除除自己外的所有用户，管理员仅可删除普通用户
+                    // 删除用户权限：站长可删除除自己外的所有用户，管理员可删除普通用户和VIP用户
                     const canDeleteUser =
                       user.username !== currentUsername &&
                       (role === 'owner' || // 站长可以删除除自己外的所有用户
-                        (role === 'admin' && user.role === 'user')); // 管理员仅可删除普通用户
+                        (role === 'admin' && (user.role === 'user' || user.role === 'vip'))); // 管理员可删除普通用户和VIP用户
 
-                    // 其他操作权限：不能操作自己，站长可操作所有用户，管理员可操作普通用户
+                    // 其他操作权限：不能操作自己，站长可操作所有用户，管理员可操作普通用户和VIP用户
                     const canOperate =
                       user.username !== currentUsername &&
                       (role === 'owner' ||
-                        (role === 'admin' && user.role === 'user'));
+                        (role === 'admin' && (user.role === 'user' || user.role === 'vip')));
                     return (
                       <tr
                         key={user.username}
@@ -622,6 +631,8 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                                 ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300'
                                 : user.role === 'admin'
                                 ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-800 dark:text-purple-300'
+                                : user.role === 'vip'
+                                ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300'
                                 : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                             }`}
                           >
@@ -629,6 +640,8 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                               ? '站长'
                               : user.role === 'admin'
                               ? '管理员'
+                              : user.role === 'vip'
+                              ? 'VIP用户'
                               : '普通用户'}
                           </span>
                         </td>
@@ -700,11 +713,29 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                             <>
                               {/* 其他操作按钮 */}
                               {user.role === 'user' && (
+                                <>
+                                  <button
+                                    onClick={() => handleSetVip(user.username)}
+                                    className='inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 dark:text-blue-200 transition-colors'
+                                  >
+                                    设为VIP
+                                  </button>
+                                  <button
+                                    onClick={() => handleSetAdmin(user.username)}
+                                    className='inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 hover:bg-purple-200 dark:bg-purple-900/40 dark:hover:bg-purple-900/60 dark:text-purple-200 transition-colors'
+                                  >
+                                    设为管理
+                                  </button>
+                                </>
+                              )}
+                              {user.role === 'vip' && (
                                 <button
-                                  onClick={() => handleSetAdmin(user.username)}
-                                  className='inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 hover:bg-purple-200 dark:bg-purple-900/40 dark:hover:bg-purple-900/60 dark:text-purple-200 transition-colors'
+                                  onClick={() =>
+                                    handleRemoveVip(user.username)
+                                  }
+                                  className='inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700/40 dark:hover:bg-gray-700/60 dark:text-gray-200 transition-colors'
                                 >
-                                  设为管理
+                                  取消VIP
                                 </button>
                               )}
                               {user.role === 'admin' && (

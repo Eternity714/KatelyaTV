@@ -11,7 +11,7 @@ export interface AdminConfig {
     AllowRegister: boolean;
     Users: {
       username: string;
-      role: 'user' | 'admin' | 'owner';
+      role: 'user' | 'vip' | 'admin' | 'owner';
       banned?: boolean;
       expires_at?: string | null; // 用户到期时间，ISO 8601 格式字符串，null 表示永不过期
     }[];
