@@ -254,6 +254,44 @@ export class UpstashRedisStorage implements IStorage {
       .filter((u): u is string => typeof u === 'string');
   }
 
+  // ---------- 用户到期时间 ----------
+  private userExpiryKey(user: string) {
+    return `u:${user}:expiry`;
+  }
+
+  async getUserExpiryTime(userName: string): Promise<string | null> {
+    const expiryTime = await withRetry(() => this.client.get(this.userExpiryKey(userName)));
+    return expiryTime ? ensureString(expiryTime) : null;
+  }
+
+  async setUserExpiryTime(userName: string, expiryTime: string | null): Promise<void> {
+    const key = this.userExpiryKey(userName);
+    if (expiryTime === null) {
+      await withRetry(() => this.client.del(key));
+    } else {
+      await withRetry(() => this.client.set(key, expiryTime));
+    }
+  }
+
+  async getExpiredUsers(): Promise<string[]> {
+    const keys = await withRetry(() => this.client.keys('u:*:expiry'));
+    const now = new Date().toISOString();
+    const expiredUsers: string[] = [];
+
+    for (const key of keys) {
+      const match = key.match(/^u:(.+?):expiry$/);
+      if (match) {
+        const userName = ensureString(match[1]);
+        const expiryTime = await withRetry(() => this.client.get(key));
+        if (expiryTime && ensureString(expiryTime) < now) {
+          expiredUsers.push(userName);
+        }
+      }
+    }
+
+    return expiredUsers;
+  }
+
   // ---------- 管理员配置 ----------
   private adminConfigKey() {
     return 'admin:config';
