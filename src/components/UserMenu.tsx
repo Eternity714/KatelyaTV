@@ -18,8 +18,8 @@ interface AuthInfo {
 interface UserStatus {
   expired: boolean;
   expiryTime: string | null;
-  daysRemaining?: number | null;
-  daysExpired?: number;
+  daysRemaining: number | null;
+  daysExpired: number | null;
   message: string;
 }
 
@@ -83,7 +83,8 @@ export const UserMenu: React.FC = () => {
           setUserStatus({
             expired: true,
             expiryTime: data.expiryTime,
-            daysExpired: data.daysExpired,
+            daysRemaining: null,
+            daysExpired: data.daysExpired || null,
             message: data.message || '您的账户已过期，请联系站长续期。'
           });
           alert(data.message || '您的账户已过期，请联系站长续期。');
@@ -99,7 +100,8 @@ export const UserMenu: React.FC = () => {
           setUserStatus({
             expired: data.expired || false,
             expiryTime: data.expiryTime,
-            daysRemaining: data.daysRemaining,
+            daysRemaining: data.daysRemaining || null,
+            daysExpired: null,
             message: data.message || '账户正常'
           });
         }
