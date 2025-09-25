@@ -28,7 +28,7 @@ export function getAuthInfoFromBrowserCookie(): {
   username?: string;
   signature?: string;
   timestamp?: number;
-  role?: 'owner' | 'admin' | 'user';
+  role?: 'owner' | 'admin' | 'vip' | 'user';
 } | null {
   if (typeof window === 'undefined') {
     return null;

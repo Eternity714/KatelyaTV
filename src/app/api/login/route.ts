@@ -46,7 +46,7 @@ async function generateSignature(
 async function generateAuthCookie(
   username?: string,
   password?: string,
-  role?: 'owner' | 'admin' | 'user',
+  role?: 'owner' | 'admin' | 'vip' | 'user',
   includePassword = false
 ): Promise<string> {
   const authData: any = { role: role || 'user' };
