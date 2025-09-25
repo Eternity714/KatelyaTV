@@ -331,21 +331,49 @@ export class D1Storage implements IStorage {
   async deleteUser(userName: string): Promise<void> {
     try {
       const db = await this.getDatabase();
+      
+      // 首先获取用户ID
+      console.log(`开始删除用户: ${userName}`);
+      const userResult = await db
+        .prepare('SELECT id FROM users WHERE username = ?')
+        .bind(userName)
+        .first<{ id: number }>();
+      
+      if (!userResult) {
+        console.error(`用户不存在: ${userName}`);
+        throw new Error(`用户不存在: ${userName}`);
+      }
+      
+      const userId = userResult.id;
+      console.log(`找到用户ID: ${userId}，开始删除关联数据`);
+      
+      // 按正确顺序删除数据，避免外键约束冲突
       const statements = [
-        db.prepare('DELETE FROM users WHERE username = ?').bind(userName),
-        db
-          .prepare('DELETE FROM play_records WHERE username = ?')
-          .bind(userName),
-        db.prepare('DELETE FROM favorites WHERE username = ?').bind(userName),
-        db
-          .prepare('DELETE FROM search_history WHERE username = ?')
-          .bind(userName),
+        // 1. 删除播放记录（使用 user_id）
+        db.prepare('DELETE FROM play_records WHERE user_id = ?').bind(userId),
+        // 2. 删除收藏记录（使用 user_id）
+        db.prepare('DELETE FROM favorites WHERE user_id = ?').bind(userId),
+        // 3. 删除搜索历史（使用 user_id）
+        db.prepare('DELETE FROM search_history WHERE user_id = ?').bind(userId),
+        // 4. 删除跳过配置（使用 user_id）
+        db.prepare('DELETE FROM skip_configs WHERE user_id = ?').bind(userId),
+        // 5. 删除用户设置（使用 username，因为该表仍使用 username 作为外键）
+        db.prepare('DELETE FROM user_settings WHERE username = ?').bind(userName),
+        // 6. 最后删除用户本身
+        db.prepare('DELETE FROM users WHERE id = ?').bind(userId)
       ];
 
+      console.log(`执行批量删除操作，共 ${statements.length} 条语句`);
       await db.batch(statements);
+      console.log(`成功删除用户: ${userName}`);
     } catch (err) {
-      console.error('Failed to delete user:', err);
-      throw err;
+      console.error(`删除用户失败 (${userName}):`, err);
+      // 提供更详细的错误信息
+      if (err instanceof Error) {
+        throw new Error(`删除用户失败: ${err.message}`);
+      } else {
+        throw new Error(`删除用户失败: 未知错误`);
+      }
     }
   }
 
