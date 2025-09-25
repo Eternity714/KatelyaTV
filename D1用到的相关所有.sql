@@ -1,128 +1,33 @@
-CREATE TABLE IF NOT EXISTS users (
-  username TEXT PRIMARY KEY,
-  password TEXT NOT NULL,
-  created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
-);
+-- KatelyaTV D1数据库脚本
+-- 整合版本：将初始化、升级和迁移脚本整合到一个文件中
+-- 最后更新：重构整合版本，兼容Cloudflare D1
+--
+-- Cloudflare D1 兼容性说明：
+-- 1. D1 不支持直接使用 SQL 的 BEGIN TRANSACTION 语句，应使用 JavaScript API
+--    正确用法: state.storage.transaction() 或 state.storage.transactionSync()
+-- 2. 本脚本已移除所有事务控制语句，在 JavaScript 中使用时应包装在事务API中
+-- 3. 使用方法：可通过 wrangler d1 execute <DATABASE_NAME> --file=./D1用到的相关所有.sql 执行
+--    或在 Workers/Pages 中通过 D1 绑定执行单条语句
 
-CREATE TABLE IF NOT EXISTS play_records (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT NOT NULL,
-  key TEXT NOT NULL,
-  title TEXT NOT NULL,
-  source_name TEXT NOT NULL,
-  cover TEXT NOT NULL,
-  year TEXT NOT NULL,
-  index_episode INTEGER NOT NULL,
-  total_episodes INTEGER NOT NULL,
-  play_time INTEGER NOT NULL,
-  total_time INTEGER NOT NULL,
-  save_time INTEGER NOT NULL,
-  search_title TEXT,
-  UNIQUE(username, key)
-);
+-- =============================================
+-- 第一部分：数据库版本控制
+-- =============================================
 
-CREATE TABLE IF NOT EXISTS favorites (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT NOT NULL,
-  key TEXT NOT NULL,
-  title TEXT NOT NULL,
-  source_name TEXT NOT NULL,
-  cover TEXT NOT NULL,
-  year TEXT NOT NULL,
-  total_episodes INTEGER NOT NULL,
-  save_time INTEGER NOT NULL,
-  UNIQUE(username, key)
-);
-
-CREATE TABLE IF NOT EXISTS search_history (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT NOT NULL,
-  keyword TEXT NOT NULL,
-  created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-  UNIQUE(username, keyword)
-);
-
-CREATE TABLE IF NOT EXISTS admin_config (
+-- 创建版本控制表
+CREATE TABLE IF NOT EXISTS db_version (
   id INTEGER PRIMARY KEY DEFAULT 1,
-  config TEXT NOT NULL,
-  updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+  version TEXT NOT NULL,
+  description TEXT NOT NULL,
+  applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS skip_configs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT NOT NULL,
-  key TEXT NOT NULL,
-  source TEXT NOT NULL,
-  video_id TEXT NOT NULL,
-  title TEXT NOT NULL,
-  segments TEXT NOT NULL,
-  updated_time INTEGER NOT NULL,
-  UNIQUE(username, key)
-);
+-- 初始化版本信息（如果不存在）
+INSERT OR IGNORE INTO db_version (id, version, description) 
+VALUES (1, '1.0.0', '初始数据库结构');
 
--- 基本索引
-CREATE INDEX IF NOT EXISTS idx_play_records_username ON play_records(username);
-CREATE INDEX IF NOT EXISTS idx_favorites_username ON favorites(username);
-CREATE INDEX IF NOT EXISTS idx_search_history_username ON search_history(username);
-CREATE INDEX IF NOT EXISTS idx_skip_configs_username ON skip_configs(username);
-
--- 复合索引优化查询性能
--- 播放记录：用户名+键值的复合索引，用于快速查找特定记录
-CREATE INDEX IF NOT EXISTS idx_play_records_username_key ON play_records(username, key);
--- 播放记录：用户名+保存时间的复合索引，用于按时间排序的查询
-CREATE INDEX IF NOT EXISTS idx_play_records_username_save_time ON play_records(username, save_time DESC);
-
--- 收藏：用户名+键值的复合索引，用于快速查找特定收藏
-CREATE INDEX IF NOT EXISTS idx_favorites_username_key ON favorites(username, key);
--- 收藏：用户名+保存时间的复合索引，用于按时间排序的查询
-CREATE INDEX IF NOT EXISTS idx_favorites_username_save_time ON favorites(username, save_time DESC);
-
--- 搜索历史：用户名+关键词的复合索引，用于快速查找/删除特定搜索记录
-CREATE INDEX IF NOT EXISTS idx_search_history_username_keyword ON search_history(username, keyword);
--- 搜索历史：用户名+创建时间的复合索引，用于按时间排序的查询
-CREATE INDEX IF NOT EXISTS idx_search_history_username_created_at ON search_history(username, created_at DESC);
-
--- 搜索历史清理查询的优化索引
-CREATE INDEX IF NOT EXISTS idx_search_history_username_id_created_at ON search_history(username, id, created_at DESC);
-
--- 跳过配置索引
--- 跳过配置：用户名+键值的复合索引，用于快速查找特定配置
-CREATE INDEX IF NOT EXISTS idx_skip_configs_username_key ON skip_configs(username, key);
--- 跳过配置：用户名+更新时间的复合索引，用于按时间排序的查询
-CREATE INDEX IF NOT EXISTS idx_skip_configs_username_updated_time ON skip_configs(username, updated_time DESC);
-
-
--- 创建跳过配置表
-CREATE TABLE IF NOT EXISTS skip_configs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT NOT NULL,
-  key TEXT NOT NULL,
-  source TEXT NOT NULL,
-  video_id TEXT NOT NULL,
-  title TEXT NOT NULL,
-  segments TEXT NOT NULL,
-  updated_time INTEGER NOT NULL,
-  UNIQUE(username, key)
-);
-
--- 为跳过配置添加索引以优化查询性能
-CREATE INDEX IF NOT EXISTS idx_skip_configs_username ON skip_configs(username);
-CREATE INDEX IF NOT EXISTS idx_skip_configs_username_key ON skip_configs(username, key);
-CREATE INDEX IF NOT EXISTS idx_skip_configs_username_updated_time ON skip_configs(username, updated_time DESC);
-
-
--- 检查表是否存在
-SELECT name FROM sqlite_master WHERE type='table' AND name='skip_configs';
-
--- 检查表结构
-PRAGMA table_info(skip_configs);
-
--- 检查索引是否创建
-SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='skip_configs';
-
-
--- D1 数据库初始化脚本
--- 用于创建 KatelyaTV 所需的数据表
+-- =============================================
+-- 第二部分：核心表结构定义
+-- =============================================
 
 -- 用户表
 CREATE TABLE IF NOT EXISTS users (
@@ -133,16 +38,30 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 用户设置表
+CREATE TABLE IF NOT EXISTS user_settings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT NOT NULL UNIQUE,
+  settings TEXT NOT NULL, -- JSON格式存储所有设置
+  updated_time INTEGER NOT NULL,
+  FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+);
+
 -- 播放记录表
 CREATE TABLE IF NOT EXISTS play_records (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
-  record_key TEXT NOT NULL,
-  video_url TEXT,
-  current_time REAL DEFAULT 0,
-  duration REAL DEFAULT 0,
-  episode_index INTEGER DEFAULT 0,
-  episode_url TEXT,
+  record_key TEXT NOT NULL, -- 唯一标识视频的键
+  title TEXT NOT NULL,
+  source_name TEXT NOT NULL,
+  cover TEXT NOT NULL,
+  year TEXT NOT NULL,
+  episode_index INTEGER NOT NULL DEFAULT 0,
+  total_episodes INTEGER NOT NULL DEFAULT 0,
+  current_time INTEGER NOT NULL DEFAULT 0, -- 当前播放时间（秒）
+  duration INTEGER NOT NULL DEFAULT 0, -- 总时长（秒）
+  updated_time INTEGER NOT NULL, -- 更新时间戳
+  search_title TEXT, -- 搜索标题（可选）
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -153,16 +72,18 @@ CREATE TABLE IF NOT EXISTS play_records (
 CREATE TABLE IF NOT EXISTS favorites (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
-  favorite_key TEXT NOT NULL,
-  title TEXT,
-  cover_url TEXT,
-  rating REAL,
-  year TEXT,
-  area TEXT,
-  category TEXT,
-  actors TEXT,
-  director TEXT,
-  description TEXT,
+  favorite_key TEXT NOT NULL, -- 唯一标识视频的键
+  title TEXT NOT NULL,
+  source_name TEXT NOT NULL,
+  cover TEXT NOT NULL,
+  year TEXT NOT NULL,
+  rating REAL, -- 评分
+  area TEXT, -- 地区
+  category TEXT, -- 分类
+  actors TEXT, -- 演员
+  director TEXT, -- 导演
+  description TEXT, -- 描述
+  total_episodes INTEGER NOT NULL DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -175,16 +96,20 @@ CREATE TABLE IF NOT EXISTS search_history (
   user_id INTEGER NOT NULL,
   keyword TEXT NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE (user_id, keyword)
 );
 
--- 跳过配置表
+-- 跳过配置表（片头片尾等）
 CREATE TABLE IF NOT EXISTS skip_configs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
-  config_key TEXT NOT NULL,
-  start_time INTEGER DEFAULT 0,
-  end_time INTEGER DEFAULT 0,
+  config_key TEXT NOT NULL, -- 视频唯一标识
+  source TEXT NOT NULL, -- 视频源
+  video_id TEXT NOT NULL, -- 视频ID
+  title TEXT NOT NULL, -- 视频标题
+  segments TEXT NOT NULL, -- JSON格式存储跳过片段信息
+  updated_time INTEGER NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -201,22 +126,42 @@ CREATE TABLE IF NOT EXISTS admin_configs (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 插入默认管理员配置
-INSERT OR IGNORE INTO admin_configs (config_key, config_value, description) VALUES
-('site_name', 'KatelyaTV', '站点名称'),
-('site_description', '高性能影视播放平台', '站点描述'),
-('enable_register', 'true', '是否允许用户注册'),
-('max_users', '100', '最大用户数量'),
-('cache_ttl', '3600', '缓存时间（秒）');
+-- =============================================
+-- 第三部分：索引创建
+-- =============================================
 
--- 创建索引以提高查询性能
+-- 用户表索引
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+
+-- 用户设置索引
+CREATE INDEX IF NOT EXISTS idx_user_settings_username ON user_settings(username);
+CREATE INDEX IF NOT EXISTS idx_user_settings_updated_time ON user_settings(updated_time DESC);
+
+-- 播放记录索引
 CREATE INDEX IF NOT EXISTS idx_play_records_user_id ON play_records(user_id);
 CREATE INDEX IF NOT EXISTS idx_play_records_record_key ON play_records(record_key);
-CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON favorites(user_id);
-CREATE INDEX IF NOT EXISTS idx_search_history_user_id ON search_history(user_id);
-CREATE INDEX IF NOT EXISTS idx_skip_configs_user_id ON skip_configs(user_id);
+CREATE INDEX IF NOT EXISTS idx_play_records_updated_time ON play_records(updated_time DESC);
 
--- 创建视图以简化查询
+-- 收藏索引
+CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON favorites(user_id);
+CREATE INDEX IF NOT EXISTS idx_favorites_favorite_key ON favorites(favorite_key);
+CREATE INDEX IF NOT EXISTS idx_favorites_updated_at ON favorites(updated_at DESC);
+
+-- 搜索历史索引
+CREATE INDEX IF NOT EXISTS idx_search_history_user_id ON search_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_search_history_created_at ON search_history(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_search_history_user_id_keyword ON search_history(user_id, keyword);
+
+-- 跳过配置索引
+CREATE INDEX IF NOT EXISTS idx_skip_configs_user_id ON skip_configs(user_id);
+CREATE INDEX IF NOT EXISTS idx_skip_configs_config_key ON skip_configs(config_key);
+CREATE INDEX IF NOT EXISTS idx_skip_configs_updated_time ON skip_configs(updated_time DESC);
+
+-- =============================================
+-- 第四部分：视图创建
+-- =============================================
+
+-- 用户统计视图
 CREATE VIEW IF NOT EXISTS user_stats AS
 SELECT 
   u.id,
@@ -231,31 +176,11 @@ LEFT JOIN favorites f ON u.id = f.user_id
 LEFT JOIN search_history sh ON u.id = sh.user_id
 GROUP BY u.id, u.username, u.created_at;
 
+-- =============================================
+-- 第五部分：默认数据
+-- =============================================
 
--- D1 数据库迁移脚本：修复 admin_config 表名问题
--- 将旧的 admin_config 表数据迁移到新的 admin_configs 表结构
-
--- 首先确保新的 admin_configs 表存在
-CREATE TABLE IF NOT EXISTS admin_configs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  config_key TEXT UNIQUE NOT NULL,
-  config_value TEXT,
-  description TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- 检查是否存在旧的 admin_config 表
--- 如果存在，迁移数据到新表
-INSERT OR IGNORE INTO admin_configs (config_key, config_value, description)
-SELECT 
-  'main_config' as config_key,
-  config as config_value,
-  '从旧表迁移的主要管理员配置' as description
-FROM admin_config 
-WHERE id = 1;
-
--- 插入默认管理员配置（如果不存在）
+-- 插入默认管理员配置
 INSERT OR IGNORE INTO admin_configs (config_key, config_value, description) VALUES
 ('site_name', 'KatelyaTV', '站点名称'),
 ('site_description', '高性能影视播放平台', '站点描述'),
@@ -263,91 +188,41 @@ INSERT OR IGNORE INTO admin_configs (config_key, config_value, description) VALU
 ('max_users', '100', '最大用户数量'),
 ('cache_ttl', '3600', '缓存时间（秒）');
 
--- 可选：删除旧表（请谨慎使用，建议先备份数据）
--- DROP TABLE IF EXISTS admin_config;
+-- =============================================
+-- 第六部分：数据迁移脚本
+-- =============================================
 
-CREATE TABLE IF NOT EXISTS user_settings (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL,
-  username TEXT NOT NULL,
-  filter_adult_content BOOLEAN DEFAULT 1,
-  theme TEXT DEFAULT 'auto',
-  language TEXT DEFAULT 'zh-CN',
-  auto_play BOOLEAN DEFAULT 1,
-  video_quality TEXT DEFAULT 'auto',
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  UNIQUE (user_id, username)
-);
+-- 注意：Cloudflare D1 不支持直接使用 SQL 的 BEGIN TRANSACTION 语句
+-- 应使用 JavaScript API: state.storage.transaction() 或 state.storage.transactionSync()
+-- 以下语句已移除事务控制，在 JavaScript 中应包装在事务API中执行
 
+-- 注意：D1 不支持在 SELECT 语句中使用 EXISTS 子查询检查表是否存在
+-- 以下是迁移旧数据的安全方式，如果表不存在会自动跳过
+-- 如果需要迁移旧的 admin_config 表数据，请取消下面注释并单独执行
 
--- 为用户设置添加索引以优化查询性能
-CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id);
-CREATE INDEX IF NOT EXISTS idx_user_settings_username ON user_settings(username);
+-- 迁移旧的 admin_config 表数据（已注释，需要时手动执行）
+/*
+INSERT OR IGNORE INTO admin_configs (config_key, config_value, description)
+VALUES ('main_config', 
+       (SELECT config FROM admin_config WHERE id = 1), 
+       '从旧表迁移的主要管理员配置');
+*/
 
+-- 更新版本信息
+UPDATE db_version SET version = '1.1.0', description = '完成数据迁移' WHERE id = 1;
 
-
--- 创建跳过配置表
-CREATE TABLE IF NOT EXISTS skip_configs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL,
-  config_key TEXT NOT NULL,
-  start_time INTEGER DEFAULT 0,
-  end_time INTEGER DEFAULT 0,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  UNIQUE (user_id, config_key)
-);
-
--- 为跳过配置添加索引以优化查询性能
-CREATE INDEX IF NOT EXISTS idx_skip_configs_user_id ON skip_configs(user_id);
-
--- 检查 user_settings 表是否存在
-SELECT name FROM sqlite_master WHERE type='table' AND name='user_settings';
-
--- 检查 skip_configs 表是否存在
-SELECT name FROM sqlite_master WHERE type='table' AND name='skip_configs';
-
--- 查看 user_settings 表结构
-PRAGMA table_info(user_settings);
-
--- 查看 skip_configs 表结构
-PRAGMA table_info(skip_configs);
+-- =============================================
+-- 第七部分：实用查询
+-- =============================================
 
 -- 检查表是否存在
-SELECT name FROM sqlite_master WHERE type='table' AND name='skip_configs';
+-- SELECT name FROM sqlite_master WHERE type='table' AND name='users';
 
 -- 检查表结构
-PRAGMA table_info(skip_configs);
+-- PRAGMA table_info(users);
 
 -- 检查索引是否创建
-SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='skip_configs';
+-- SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='users';
 
-
--- 删除现有的不兼容表
-DROP TABLE IF EXISTS user_settings;
-
--- 创建与代码完全兼容的表结构
-CREATE TABLE user_settings (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT NOT NULL UNIQUE,
-  settings TEXT NOT NULL,
-  updated_time INTEGER NOT NULL
-);
-
--- 添加必要索引
-CREATE INDEX IF NOT EXISTS idx_user_settings_username ON user_settings(username);
-CREATE INDEX IF NOT EXISTS idx_user_settings_updated_time ON user_settings(updated_time DESC);
-
-
--- 插入设置数据（请替换 'your_username' 为实际用户名）
-INSERT INTO user_settings (username, settings, updated_time) VALUES (
-  'your_username',
-  '{"filter_adult_content":true,"theme":"auto","language":"zh-CN","auto_play":true,"video_quality":"auto"}',
-  strftime('%s', 'now')
-);
-
--- 验证数据插入成功
-SELECT * FROM user_settings WHERE username = 'your_username';
+-- 检查数据库版本
+-- SELECT * FROM db_version;
