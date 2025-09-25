@@ -290,6 +290,8 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
       | 'unban'
       | 'setAdmin'
       | 'cancelAdmin'
+      | 'setVip'
+      | 'cancelVip'
       | 'changePassword'
       | 'deleteUser'
       | 'setUserExpiry',
