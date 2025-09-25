@@ -646,8 +646,13 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                           {canOperate ? (
                             <select
                               value={user.role}
-                              onChange={(e) => handleRoleChange(user.username, e.target.value as 'user' | 'vip' | 'admin')}
-                              className={`px-2 py-1 text-xs rounded-md border-0 focus:ring-2 focus:ring-blue-500 ${
+                              onChange={(e) =>
+                                handleRoleChange(
+                                  user.username,
+                                  e.target.value as 'user' | 'vip' | 'admin'
+                                )
+                              }
+                              className={`pl-2 pr-6 py-1 text-xs rounded-md border-0 focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer min-w-[80px] ${
                                 user.role === 'owner'
                                   ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300'
                                   : user.role === 'admin'
@@ -656,6 +661,12 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                                   ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300'
                                   : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                               }`}
+                              style={{
+                                backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
+                                backgroundPosition: 'right 0.25rem center',
+                                backgroundRepeat: 'no-repeat',
+                                backgroundSize: '1rem 1rem'
+                              }}
                             >
                               <option value="user">普通用户</option>
                               <option value="vip">VIP用户</option>
