@@ -9,6 +9,7 @@ import { checkForUpdates, CURRENT_VERSION, UpdateStatus } from '@/lib/version';
 import IOSCompatibility from '@/components/IOSCompatibility';
 import { useSite } from '@/components/SiteProvider';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { useToast } from '@/components/ToastProvider';
 
 // 版本显示组件
 function VersionDisplay() {
@@ -74,11 +75,11 @@ function LoginPageClient() {
   const searchParams = useSearchParams();
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [shouldAskUsername, setShouldAskUsername] = useState(false);
   const [enableRegister, setEnableRegister] = useState(false);
   const { siteName } = useSite();
+  const { showError } = useToast();
 
   // 在客户端挂载后设置配置
   useEffect(() => {
@@ -93,7 +94,6 @@ function LoginPageClient() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError(null);
 
     if (!password || (shouldAskUsername && !username)) return;
 
@@ -115,17 +115,17 @@ function LoginPageClient() {
         const data = await res.json().catch(() => ({}));
         if (data.expired) {
           // 用户账户已过期
-          setError(data.error || '您的账户已过期，无法登录。请联系站长续期。');
+          showError(data.error || '您的账户已过期，无法登录。请联系站长续期。');
         } else {
           // 普通的认证错误
-          setError(data.error || '用户名或密码错误');
+          showError(data.error || '用户名或密码错误');
         }
       } else {
         const data = await res.json().catch(() => ({}));
-        setError(data.error ?? '服务器错误');
+        showError(data.error ?? '服务器错误');
       }
     } catch (error) {
-      setError('网络错误，请稍后重试');
+      showError('网络错误，请稍后重试');
     } finally {
       setLoading(false);
     }
@@ -133,7 +133,6 @@ function LoginPageClient() {
 
   // 处理注册逻辑
   const handleRegister = async () => {
-    setError(null);
     if (!password || !username) return;
 
     try {
@@ -149,10 +148,10 @@ function LoginPageClient() {
         router.replace(redirect);
       } else {
         const data = await res.json().catch(() => ({}));
-        setError(data.error ?? '服务器错误');
+        showError(data.error ?? '服务器错误');
       }
     } catch (error) {
-      setError('网络错误，请稍后重试');
+      showError('网络错误，请稍后重试');
     } finally {
       setLoading(false);
     }
@@ -215,10 +214,6 @@ function LoginPageClient() {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
-
-            {error && (
-              <p className='text-sm text-red-600 dark:text-red-400'>{error}</p>
-            )}
 
             {/* 登录 / 注册按钮 */}
             {shouldAskUsername && enableRegister ? (

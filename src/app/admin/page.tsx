@@ -1798,7 +1798,7 @@ const SiteConfigComponent = ({ config }: { config: AdminConfig | null }) => {
 
 function AdminPageClient() {
   const router = useRouter();
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
   const [config, setConfig] = useState<AdminConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
