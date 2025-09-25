@@ -633,15 +633,30 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                           </span>
                         </td>
                         <td className='px-6 py-4 whitespace-nowrap'>
-                          <span
-                            className={`px-2 py-1 text-xs rounded-full ${
-                              !user.banned
-                                ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300'
-                                : 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300'
-                            }`}
-                          >
-                            {!user.banned ? '正常' : '已封禁'}
-                          </span>
+                          {(() => {
+                            // 检查用户是否过期
+                            const isExpired = user.expires_at && new Date(user.expires_at) < new Date();
+                            
+                            if (user.banned) {
+                              return (
+                                <span className='px-2 py-1 text-xs rounded-full bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300'>
+                                  已封禁
+                                </span>
+                              );
+                            } else if (isExpired) {
+                              return (
+                                <span className='px-2 py-1 text-xs rounded-full bg-orange-100 dark:bg-orange-900/20 text-orange-800 dark:text-orange-300'>
+                                  已过期
+                                </span>
+                              );
+                            } else {
+                              return (
+                                <span className='px-2 py-1 text-xs rounded-full bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300'>
+                                  正常
+                                </span>
+                              );
+                            }
+                          })()}
                         </td>
                         <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100'>
                           {user.expires_at ? (

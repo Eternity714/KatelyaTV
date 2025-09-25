@@ -15,6 +15,14 @@ interface AuthInfo {
   role?: 'owner' | 'admin' | 'user';
 }
 
+interface UserStatus {
+  expired: boolean;
+  expiryTime: string | null;
+  daysRemaining?: number | null;
+  daysExpired?: number;
+  message: string;
+}
+
 export const UserMenu: React.FC = () => {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
@@ -23,6 +31,7 @@ export const UserMenu: React.FC = () => {
   const [authInfo, setAuthInfo] = useState<AuthInfo | null>(null);
   const [storageType, setStorageType] = useState<string>('localstorage');
   const [mounted, setMounted] = useState(false);
+  const [userStatus, setUserStatus] = useState<UserStatus | null>(null);
 
   // 设置相关状态
   const [defaultAggregateSearch, setDefaultAggregateSearch] = useState(true);
@@ -71,6 +80,12 @@ export const UserMenu: React.FC = () => {
         if (response.status === 403) {
           // 用户已过期
           const data = await response.json();
+          setUserStatus({
+            expired: true,
+            expiryTime: data.expiryTime,
+            daysExpired: data.daysExpired,
+            message: data.message || '您的账户已过期，请联系站长续期。'
+          });
           alert(data.message || '您的账户已过期，请联系站长续期。');
           // 清除认证信息并跳转到登录页
           document.cookie = 'auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
@@ -78,8 +93,17 @@ export const UserMenu: React.FC = () => {
         } else if (response.status === 401) {
           // 认证失败，跳转到登录页
           window.location.href = '/login';
+        } else if (response.status === 200) {
+          // 用户状态正常，保存状态信息
+          const data = await response.json();
+          setUserStatus({
+            expired: data.expired || false,
+            expiryTime: data.expiryTime,
+            daysRemaining: data.daysRemaining,
+            message: data.message || '账户正常'
+          });
         }
-        // 其他情况（200, 500等）不做处理，让用户继续使用
+        // 其他情况（500等）不做处理，让用户继续使用
       } catch (error) {
         console.error('检查用户状态失败:', error);
         // 网络错误等情况不做处理，避免影响用户体验
@@ -391,6 +415,51 @@ export const UserMenu: React.FC = () => {
                 {storageType === 'localstorage' ? '本地' : storageType}
               </div>
             </div>
+            {/* 用户状态显示 */}
+            {storageType !== 'localstorage' && userStatus && (
+              <div className='mt-1 space-y-1'>
+                <div className='flex items-center justify-between'>
+                  <div className='flex items-center gap-1'>
+                    <span className='text-[10px] text-gray-500 dark:text-gray-400'>状态：</span>
+                    <span
+                      className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                        userStatus.expired
+                          ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                          : userStatus.daysRemaining !== null && userStatus.daysRemaining <= 7
+                          ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+                          : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                      }`}
+                    >
+                      {userStatus.expired 
+                        ? '已过期' 
+                        : userStatus.daysRemaining !== null && userStatus.daysRemaining <= 7
+                        ? '即将过期'
+                        : '正常'}
+                    </span>
+                  </div>
+                  {userStatus.expiryTime && (
+                    <div className='text-[9px] text-gray-400 dark:text-gray-500'>
+                      到期：{new Date(userStatus.expiryTime).toLocaleDateString('zh-CN')}
+                    </div>
+                  )}
+                </div>
+                {/* 剩余天数或过期天数显示 */}
+                {userStatus.expired && userStatus.daysExpired && (
+                  <div className='text-[9px] text-red-500 dark:text-red-400'>
+                    已过期 {userStatus.daysExpired} 天
+                  </div>
+                )}
+                {!userStatus.expired && userStatus.daysRemaining !== null && userStatus.daysRemaining <= 30 && (
+                  <div className={`text-[9px] ${
+                    userStatus.daysRemaining <= 7 
+                      ? 'text-yellow-600 dark:text-yellow-400' 
+                      : 'text-blue-500 dark:text-blue-400'
+                  }`}>
+                    剩余 {userStatus.daysRemaining} 天
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

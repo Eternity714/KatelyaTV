@@ -28,27 +28,40 @@ export async function GET(request: NextRequest) {
       if (expiryTime) {
         const now = new Date();
         const expiry = new Date(expiryTime);
+        const timeDiff = expiry.getTime() - now.getTime();
+        const daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
         
         if (now > expiry) {
           // 用户已过期
+          const daysExpired = Math.ceil((now.getTime() - expiry.getTime()) / (1000 * 3600 * 24));
           return NextResponse.json({
             expired: true,
             expiryTime: expiryTime,
-            message: '您的账户已过期，请联系站长续期。'
+            daysExpired: daysExpired,
+            message: `您的账户已过期 ${daysExpired} 天，请联系站长续期。`
           }, { status: 403 });
         }
         
-        // 用户未过期，返回到期时间
+        // 用户未过期，返回到期时间和剩余天数
+        let message = '账户正常';
+        if (daysRemaining <= 7) {
+          message = `账户将在 ${daysRemaining} 天后过期，请及时续期。`;
+        } else if (daysRemaining <= 30) {
+          message = `账户将在 ${daysRemaining} 天后过期。`;
+        }
+        
         return NextResponse.json({
           expired: false,
           expiryTime: expiryTime,
-          message: '账户正常'
+          daysRemaining: daysRemaining,
+          message: message
         });
       } else {
         // 用户永不过期
         return NextResponse.json({
           expired: false,
           expiryTime: null,
+          daysRemaining: null,
           message: '账户永不过期'
         });
       }
