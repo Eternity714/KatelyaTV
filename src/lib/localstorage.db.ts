@@ -363,6 +363,60 @@ export class LocalStorage implements IStorage {
     }
   }
 
+  // ---------- 用户到期时间 ----------
+  async getUserExpiryTime(userName: string): Promise<string | null> {
+    if (typeof window === 'undefined') return null;
+    
+    try {
+      const storageKey = this.getStorageKey('user_expiry', userName);
+      return localStorage.getItem(storageKey);
+    } catch (error) {
+      console.error('Error getting user expiry time:', error);
+      return null;
+    }
+  }
+
+  async setUserExpiryTime(userName: string, expiryTime: string | null): Promise<void> {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const storageKey = this.getStorageKey('user_expiry', userName);
+      if (expiryTime === null) {
+        localStorage.removeItem(storageKey);
+      } else {
+        localStorage.setItem(storageKey, expiryTime);
+      }
+    } catch (error) {
+      console.error('Error setting user expiry time:', error);
+    }
+  }
+
+  async getExpiredUsers(): Promise<string[]> {
+    if (typeof window === 'undefined') return [];
+    
+    try {
+      const expiredUsers: string[] = [];
+      const prefix = 'katelyatv_user_expiry_';
+      const now = new Date().toISOString();
+      
+      for (let i = 0; i < localStorage.length; i++) {
+        const storageKey = localStorage.key(i);
+        if (storageKey && storageKey.startsWith(prefix)) {
+          const userName = storageKey.replace(prefix, '');
+          const expiryTime = localStorage.getItem(storageKey);
+          if (expiryTime && expiryTime < now) {
+            expiredUsers.push(userName);
+          }
+        }
+      }
+      
+      return expiredUsers;
+    } catch (error) {
+      console.error('Error getting expired users:', error);
+      return [];
+    }
+  }
+
   async getAdminConfig(): Promise<AdminConfig | null> {
     if (typeof window === 'undefined') return null;
     

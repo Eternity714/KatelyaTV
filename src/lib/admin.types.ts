@@ -13,6 +13,7 @@ export interface AdminConfig {
       username: string;
       role: 'user' | 'admin' | 'owner';
       banned?: boolean;
+      expires_at?: string | null; // 用户到期时间，ISO 8601 格式字符串，null 表示永不过期
     }[];
   };
   SourceConfig: {

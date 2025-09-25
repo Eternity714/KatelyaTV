@@ -9,6 +9,94 @@ import { IStorage } from '@/lib/types';
 
 export const runtime = 'edge';
 
+// GET 方法：获取用户信息（包括到期时间）
+export async function GET(request: NextRequest) {
+  const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
+  if (storageType === 'localstorage') {
+    return NextResponse.json(
+      {
+        error: '不支持本地存储进行管理员配置',
+      },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const authInfo = getAuthInfoFromCookie(request);
+    if (!authInfo || !authInfo.username) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const username = authInfo.username;
+
+    // 获取查询参数
+    const { searchParams } = new URL(request.url);
+    const targetUsername = searchParams.get('username');
+
+    if (!targetUsername) {
+      return NextResponse.json({ error: '缺少用户名参数' }, { status: 400 });
+    }
+
+    // 获取配置与存储
+    const adminConfig = await getConfig();
+    const storage = getStorage();
+
+    // 判定操作者角色
+    let operatorRole: 'owner' | 'admin';
+    if (username === process.env.USERNAME) {
+      operatorRole = 'owner';
+    } else {
+      const userEntry = adminConfig.UserConfig.Users.find(
+        (u) => u.username === username
+      );
+      if (!userEntry || userEntry.role !== 'admin') {
+        return NextResponse.json({ error: '权限不足' }, { status: 401 });
+      }
+      operatorRole = 'admin';
+    }
+
+    // 查找目标用户
+    const targetEntry = adminConfig.UserConfig.Users.find(
+      (u) => u.username === targetUsername
+    );
+
+    if (!targetEntry) {
+      return NextResponse.json({ error: '用户不存在' }, { status: 404 });
+    }
+
+    // 权限检查：管理员不能查看其他管理员的信息（除非是站长）
+    const isTargetAdmin = targetEntry.role === 'admin';
+    if (isTargetAdmin && operatorRole !== 'owner' && username !== targetUsername) {
+      return NextResponse.json({ error: '权限不足' }, { status: 401 });
+    }
+
+    // 获取用户到期时间
+    let expiryTime: string | null = null;
+    if (storage && typeof storage.getUserExpiryTime === 'function') {
+      try {
+        expiryTime = await storage.getUserExpiryTime(targetUsername);
+      } catch (error) {
+        console.error('获取用户到期时间失败:', error);
+      }
+    }
+
+    return NextResponse.json({
+      username: targetEntry.username,
+      role: targetEntry.role,
+      banned: targetEntry.banned || false,
+      expires_at: expiryTime,
+    });
+  } catch (error) {
+    console.error('获取用户信息失败:', error);
+    return NextResponse.json(
+      {
+        error: '获取用户信息失败',
+        details: (error as Error).message,
+      },
+      { status: 500 }
+    );
+  }
+}
+
 // 支持的操作类型
 const ACTIONS = [
   'add',
@@ -19,6 +107,7 @@ const ACTIONS = [
   'setAllowRegister',
   'changePassword',
   'deleteUser',
+  'setUserExpiry', // 新增：设置用户到期时间
 ] as const;
 
 export async function POST(request: NextRequest) {
@@ -46,11 +135,13 @@ export async function POST(request: NextRequest) {
       targetPassword, // 目标用户密码（仅在添加用户时需要）
       allowRegister,
       action,
+      expiryTime, // 用户到期时间（ISO 8601 格式字符串或 null）
     } = body as {
       targetUsername?: string;
       targetPassword?: string;
       allowRegister?: boolean;
       action?: (typeof ACTIONS)[number];
+      expiryTime?: string | null;
     };
 
     if (!action || !ACTIONS.includes(action)) {
@@ -59,6 +150,15 @@ export async function POST(request: NextRequest) {
 
     if (action !== 'setAllowRegister' && !targetUsername) {
       return NextResponse.json({ error: '缺少目标用户名' }, { status: 400 });
+    }
+
+    if (action === 'setUserExpiry' && expiryTime !== null && expiryTime !== undefined) {
+      // 验证到期时间格式（应该是有效的 ISO 8601 字符串）
+      try {
+        new Date(expiryTime);
+      } catch {
+        return NextResponse.json({ error: '到期时间格式无效' }, { status: 400 });
+      }
     }
 
     if (
@@ -303,6 +403,37 @@ export async function POST(request: NextRequest) {
           if (userIndex > -1) {
             adminConfig.UserConfig.Users.splice(userIndex, 1);
           }
+
+          break;
+        }
+        case 'setUserExpiry': {
+          if (!targetEntry) {
+            return NextResponse.json(
+              { error: '目标用户不存在' },
+              { status: 404 }
+            );
+          }
+
+          // 权限检查：站长可设置所有用户的到期时间，管理员可设置普通用户的到期时间
+          if (isTargetAdmin && operatorRole !== 'owner') {
+            return NextResponse.json(
+              { error: '仅站长可设置管理员的到期时间' },
+              { status: 401 }
+            );
+          }
+
+          if (!storage || typeof storage.setUserExpiryTime !== 'function') {
+            return NextResponse.json(
+              { error: '存储未配置用户到期时间功能' },
+              { status: 500 }
+            );
+          }
+
+          // 设置用户到期时间
+          await storage.setUserExpiryTime(targetUsername!, expiryTime || null);
+          
+          // 更新配置中的用户信息
+          targetEntry.expires_at = expiryTime || null;
 
           break;
         }

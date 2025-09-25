@@ -42,6 +42,16 @@ export interface Favorite {
   search_title: string; // 搜索时使用的标题
 }
 
+// 用户数据库记录接口
+export interface UserRecord {
+  id: number;
+  username: string;
+  password: string;
+  expires_at?: string | null; // 用户到期时间，ISO 8601 格式字符串，null 表示永不过期
+  created_at: string;
+  updated_at: string;
+}
+
 // 存储接口
 export interface IStorage {
   // 播放记录相关
@@ -88,6 +98,11 @@ export interface IStorage {
 
   // 用户列表
   getAllUsers(): Promise<string[]>;
+
+  // 用户到期时间相关
+  getUserExpiryTime(userName: string): Promise<string | null>;
+  setUserExpiryTime(userName: string, expiryTime: string | null): Promise<void>;
+  getExpiredUsers(): Promise<string[]>; // 获取已过期的用户列表
 
   // 管理员配置相关
   getAdminConfig(): Promise<AdminConfig | null>;

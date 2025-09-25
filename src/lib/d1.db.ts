@@ -470,6 +470,49 @@ export class D1Storage implements IStorage {
     }
   }
 
+  // 用户到期时间相关
+  async getUserExpiryTime(userName: string): Promise<string | null> {
+    try {
+      const db = await this.getDatabase();
+      const result = await db
+        .prepare('SELECT expires_at FROM users WHERE username = ?')
+        .bind(userName)
+        .first<{ expires_at: string | null }>();
+
+      return result?.expires_at || null;
+    } catch (err) {
+      console.error('Failed to get user expiry time:', err);
+      throw err;
+    }
+  }
+
+  async setUserExpiryTime(userName: string, expiryTime: string | null): Promise<void> {
+    try {
+      const db = await this.getDatabase();
+      await db
+        .prepare('UPDATE users SET expires_at = ?, updated_at = CURRENT_TIMESTAMP WHERE username = ?')
+        .bind(expiryTime, userName)
+        .run();
+    } catch (err) {
+      console.error('Failed to set user expiry time:', err);
+      throw err;
+    }
+  }
+
+  async getExpiredUsers(): Promise<string[]> {
+    try {
+      const db = await this.getDatabase();
+      const result = await db
+        .prepare('SELECT username FROM users WHERE expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP')
+        .all<{ username: string }>();
+
+      return result.results.map((row) => row.username);
+    } catch (err) {
+      console.error('Failed to get expired users:', err);
+      throw err;
+    }
+  }
+
   // 管理员配置相关
   async getAdminConfig(): Promise<AdminConfig | null> {
     try {
