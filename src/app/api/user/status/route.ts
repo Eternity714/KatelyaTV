@@ -23,43 +23,33 @@ export async function GET(request: NextRequest) {
 
     // 检查用户到期时间
     try {
-      const storage = db.storage;
-      if (storage && typeof storage.getUserExpiryTime === 'function') {
-        const expiryTime = await storage.getUserExpiryTime(username);
+      const expiryTime = await db.getUserExpiryTime(username);
+      
+      if (expiryTime) {
+        const now = new Date();
+        const expiry = new Date(expiryTime);
         
-        if (expiryTime) {
-          const now = new Date();
-          const expiry = new Date(expiryTime);
-          
-          if (now > expiry) {
-            // 用户已过期
-            return NextResponse.json({
-              expired: true,
-              expiryTime: expiryTime,
-              message: '您的账户已过期，请联系站长续期。'
-            }, { status: 403 });
-          }
-          
-          // 用户未过期，返回到期时间
+        if (now > expiry) {
+          // 用户已过期
           return NextResponse.json({
-            expired: false,
+            expired: true,
             expiryTime: expiryTime,
-            message: '账户正常'
-          });
-        } else {
-          // 用户永不过期
-          return NextResponse.json({
-            expired: false,
-            expiryTime: null,
-            message: '账户永不过期'
-          });
+            message: '您的账户已过期，请联系站长续期。'
+          }, { status: 403 });
         }
+        
+        // 用户未过期，返回到期时间
+        return NextResponse.json({
+          expired: false,
+          expiryTime: expiryTime,
+          message: '账户正常'
+        });
       } else {
-        // 存储不支持到期时间功能
+        // 用户永不过期
         return NextResponse.json({
           expired: false,
           expiryTime: null,
-          message: '当前存储类型不支持到期时间功能'
+          message: '账户永不过期'
         });
       }
     } catch (error) {

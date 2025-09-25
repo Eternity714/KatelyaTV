@@ -152,6 +152,27 @@ export class DbManager {
     return this.storage.checkUserExist(userName);
   }
 
+  // ---------- 用户到期时间 ----------
+  async getUserExpiryTime(userName: string): Promise<string | null> {
+    if (typeof (this.storage as any).getUserExpiryTime === 'function') {
+      return (this.storage as any).getUserExpiryTime(userName);
+    }
+    return null;
+  }
+
+  async setUserExpiryTime(userName: string, expiryTime: string | null): Promise<void> {
+    if (typeof (this.storage as any).setUserExpiryTime === 'function') {
+      await (this.storage as any).setUserExpiryTime(userName, expiryTime);
+    }
+  }
+
+  async getExpiredUsers(): Promise<string[]> {
+    if (typeof (this.storage as any).getExpiredUsers === 'function') {
+      return (this.storage as any).getExpiredUsers();
+    }
+    return [];
+  }
+
   // ---------- 搜索历史 ----------
   async getSearchHistory(userName: string): Promise<string[]> {
     return this.storage.getSearchHistory(userName);

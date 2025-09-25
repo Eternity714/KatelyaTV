@@ -180,21 +180,18 @@ export async function POST(req: NextRequest) {
 
       // 检查用户是否已过期
       try {
-        const storage = db.storage;
-        if (storage && typeof storage.getUserExpiryTime === 'function') {
-          const expiryTime = await storage.getUserExpiryTime(username);
-          if (expiryTime) {
-            const now = new Date();
-            const expiry = new Date(expiryTime);
-            if (now > expiry) {
-              return NextResponse.json(
-                { 
-                  error: '您的账户已过期，无法登录。请联系站长续期。',
-                  expired: true 
-                },
-                { status: 401 }
-              );
-            }
+        const expiryTime = await db.getUserExpiryTime(username);
+        if (expiryTime) {
+          const now = new Date();
+          const expiry = new Date(expiryTime);
+          if (now > expiry) {
+            return NextResponse.json(
+              { 
+                error: '您的账户已过期，无法登录。请联系站长续期。',
+                expired: true 
+              },
+              { status: 401 }
+            );
           }
         }
       } catch (expiryCheckError) {
