@@ -38,19 +38,7 @@ import { AdminConfig, AdminConfigResult } from '@/lib/admin.types';
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 
 import PageLayout from '@/components/PageLayout';
-
-// 统一弹窗方法（必须在首次使用前定义）
-const showError = (message: string) =>
-  Swal.fire({ icon: 'error', title: '错误', text: message });
-
-const showSuccess = (message: string) =>
-  Swal.fire({
-    icon: 'success',
-    title: '成功',
-    text: message,
-    timer: 2000,
-    showConfirmButton: false,
-  });
+import { useToast } from '@/components/ToastProvider';
 
 // 新增站点配置类型
 interface SiteConfig {
@@ -119,6 +107,7 @@ interface UserConfigProps {
 }
 
 const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
+  const { showSuccess, showError } = useToast();
   const [userSettings, setUserSettings] = useState({
     enableRegistration: false,
   });
@@ -198,7 +187,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
     try {
       // 根据新角色确定需要执行的操作
       let action: string;
-      
+
       if (newRole === 'user') {
         // 如果目标是普通用户，需要取消当前角色
         const currentUser = config?.UserConfig.Users.find(u => u.username === username);
@@ -267,7 +256,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
   const handleShowSetExpiryForm = (username: string) => {
     const user = config?.UserConfig.Users.find(u => u.username === username);
     const currentExpiry = user?.expires_at;
-    
+
     // 如果有当前到期时间，转换为本地时间格式用于输入框
     let formattedExpiry = '';
     if (currentExpiry) {
@@ -277,7 +266,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
         .toISOString()
         .slice(0, 16);
     }
-    
+
     setExpiryUser({ username, expiryTime: formattedExpiry });
     setShowSetExpiryForm(true);
     setShowAddUserForm(false); // 关闭其他表单
@@ -286,12 +275,12 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
 
   const handleSetUserExpiry = async () => {
     if (!expiryUser.username) return;
-    
+
     // 如果输入了时间，转换为 ISO 字符串；否则设为 null（永不过期）
-    const expiryTime = expiryUser.expiryTime 
-      ? new Date(expiryUser.expiryTime).toISOString() 
+    const expiryTime = expiryUser.expiryTime
+      ? new Date(expiryUser.expiryTime).toISOString()
       : null;
-    
+
     await handleUserAction('setUserExpiry', expiryUser.username, undefined, expiryTime);
     setExpiryUser({ username: '', expiryTime: '' });
     setShowSetExpiryForm(false);
@@ -370,9 +359,8 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
         </h4>
         <div className='flex items-center justify-between'>
           <label
-            className={`text-gray-700 dark:text-gray-300 ${
-              isD1Storage || isUpstashStorage ? 'opacity-50' : ''
-            }`}
+            className={`text-gray-700 dark:text-gray-300 ${isD1Storage || isUpstashStorage ? 'opacity-50' : ''
+              }`}
           >
             允许新用户注册
             {isD1Storage && (
@@ -393,22 +381,19 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
               toggleAllowRegister(!userSettings.enableRegistration)
             }
             disabled={isD1Storage || isUpstashStorage}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${
-              userSettings.enableRegistration
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${userSettings.enableRegistration
                 ? 'bg-green-600'
                 : 'bg-gray-200 dark:bg-gray-700'
-            } ${
-              isD1Storage || isUpstashStorage
+              } ${isD1Storage || isUpstashStorage
                 ? 'opacity-50 cursor-not-allowed'
                 : ''
-            }`}
+              }`}
           >
             <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                userSettings.enableRegistration
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${userSettings.enableRegistration
                   ? 'translate-x-6'
                   : 'translate-x-1'
-              }`}
+                }`}
             />
           </button>
         </div>
@@ -652,15 +637,14 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                                   e.target.value as 'user' | 'vip' | 'admin'
                                 )
                               }
-                              className={`pl-2 pr-6 py-1 text-xs rounded-md border-0 focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer min-w-[80px] ${
-                                user.role === 'owner'
+                              className={`pl-2 pr-6 py-1 text-xs rounded-md border-0 focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer min-w-[80px] ${user.role === 'owner'
                                   ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300'
                                   : user.role === 'admin'
-                                  ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-800 dark:text-purple-300'
-                                  : user.role === 'vip'
-                                  ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300'
-                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                              }`}
+                                    ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-800 dark:text-purple-300'
+                                    : user.role === 'vip'
+                                      ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300'
+                                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                }`}
                               style={{
                                 backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
                                 backgroundPosition: 'right 0.25rem center',
@@ -675,23 +659,22 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                             </select>
                           ) : (
                             <span
-                              className={`px-2 py-1 text-xs rounded-full ${
-                                user.role === 'owner'
+                              className={`px-2 py-1 text-xs rounded-full ${user.role === 'owner'
                                   ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300'
                                   : user.role === 'admin'
-                                  ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-800 dark:text-purple-300'
-                                  : user.role === 'vip'
-                                  ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300'
-                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                              }`}
+                                    ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-800 dark:text-purple-300'
+                                    : user.role === 'vip'
+                                      ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300'
+                                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                }`}
                             >
                               {user.role === 'owner'
                                 ? '站长'
                                 : user.role === 'admin'
-                                ? '管理员'
-                                : user.role === 'vip'
-                                ? 'VIP用户'
-                                : '普通用户'}
+                                  ? '管理员'
+                                  : user.role === 'vip'
+                                    ? 'VIP用户'
+                                    : '普通用户'}
                             </span>
                           )}
                         </td>
@@ -699,7 +682,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                           {(() => {
                             // 检查用户是否过期
                             const isExpired = user.expires_at && new Date(user.expires_at) < new Date();
-                            
+
                             if (user.banned) {
                               return (
                                 <span className='px-2 py-1 text-xs rounded-full bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300'>
@@ -813,6 +796,7 @@ const VideoSourceConfig = ({
   config: AdminConfig | null;
   refreshConfig: () => Promise<void>;
 }) => {
+  const { showSuccess, showError } = useToast();
   const [sources, setSources] = useState<DataSource[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [orderChanged, setOrderChanged] = useState(false);
@@ -890,7 +874,7 @@ const VideoSourceConfig = ({
       showError('示例源不可删除，这些源用于演示功能');
       return;
     }
-    
+
     callSourceApi({ action: 'delete', key }).catch(() => {
       console.error('操作失败', 'delete', key);
     });
@@ -979,7 +963,7 @@ const VideoSourceConfig = ({
       try {
         await callSourceApi({ action: 'delete', key });
         successCount++;
-        
+
         // 显示进度
         if (selectedArray.length > 1) {
           Swal.update({
@@ -1022,7 +1006,7 @@ const VideoSourceConfig = ({
         icon: successCount > 0 ? 'warning' : 'error',
         confirmButtonText: '确定'
       });
-      
+
       // 清空已成功删除的选择项
       const failedKeys = new Set(
         errors.map(err => {
@@ -1061,7 +1045,7 @@ const VideoSourceConfig = ({
       const dataStr = JSON.stringify(exportConfig, null, 2);
       const dataBlob = new Blob([dataStr], { type: 'application/json' });
       const url = URL.createObjectURL(dataBlob);
-      
+
       const link = document.createElement('a');
       link.href = url;
       link.download = `config_${new Date().toISOString().split('T')[0]}.json`;
@@ -1124,9 +1108,9 @@ const VideoSourceConfig = ({
             if (!source || typeof source !== 'object' || Array.isArray(source)) {
               throw new Error(`${key}: 无效的配置对象`);
             }
-            
+
             const sourceObj = source as { api?: string; name?: string; detail?: string; is_adult?: boolean };
-            
+
             if (!sourceObj.api || !sourceObj.name) {
               throw new Error(`${key}: 缺少必要字段 api 或 name`);
             }
@@ -1181,7 +1165,7 @@ const VideoSourceConfig = ({
     };
 
     reader.readAsText(file);
-    
+
     // 清空input，允许重复选择同一文件
     event.target.value = '';
   };
@@ -1231,7 +1215,7 @@ const VideoSourceConfig = ({
         >
           <GripVertical size={16} />
         </td>
-        
+
         {/* 批量选择复选框 */}
         {batchMode && (
           <td className='px-4 py-4 whitespace-nowrap'>
@@ -1271,11 +1255,10 @@ const VideoSourceConfig = ({
         </td>
         <td className='px-6 py-4 whitespace-nowrap max-w-[1rem]'>
           <span
-            className={`px-2 py-1 text-xs rounded-full ${
-              !source.disabled
+            className={`px-2 py-1 text-xs rounded-full ${!source.disabled
                 ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300'
                 : 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300'
-            }`}
+              }`}
           >
             {!source.disabled ? '启用中' : '已禁用'}
           </span>
@@ -1283,11 +1266,10 @@ const VideoSourceConfig = ({
         <td className='px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2'>
           <button
             onClick={() => handleToggleEnable(source.key)}
-            className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium ${
-              !source.disabled
+            className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium ${!source.disabled
                 ? 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60'
                 : 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/60'
-            } transition-colors`}
+              } transition-colors`}
           >
             {!source.disabled ? '禁用' : '启用'}
           </button>
@@ -1323,7 +1305,7 @@ const VideoSourceConfig = ({
         <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
           视频源列表
         </h4>
-        
+
         <div className='flex items-center gap-2 flex-wrap'>
           {/* 批量操作区域 */}
           {!batchMode ? (
@@ -1335,7 +1317,7 @@ const VideoSourceConfig = ({
               >
                 ☑️ 批量选择
               </button>
-              
+
               {/* 导入导出按钮 */}
               <div className='flex items-center gap-1 border-l border-gray-300 dark:border-gray-600 pl-2'>
                 <label className='relative'>
@@ -1349,7 +1331,7 @@ const VideoSourceConfig = ({
                     📂 导入
                   </span>
                 </label>
-                
+
                 <button
                   onClick={handleExportConfig}
                   className='inline-flex items-center px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors'
@@ -1357,7 +1339,7 @@ const VideoSourceConfig = ({
                   📤 导出
                 </button>
               </div>
-              
+
               {/* 添加视频源按钮 */}
               <button
                 onClick={() => setShowAddForm(!showAddForm)}
@@ -1375,12 +1357,12 @@ const VideoSourceConfig = ({
               >
                 ❌ 退出批量
               </button>
-              
+
               <div className='flex items-center gap-1 border-l border-gray-300 dark:border-gray-600 pl-2'>
                 <span className='text-xs text-gray-500 dark:text-gray-400'>
                   已选 {selectedSources.size} 个
                 </span>
-                
+
                 <button
                   onClick={handleBatchDelete}
                   disabled={selectedSources.size === 0}
@@ -1433,7 +1415,7 @@ const VideoSourceConfig = ({
               }
               className='px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
             />
-            
+
             {/* 成人内容标记复选框 */}
             <div className='flex items-center space-x-2'>
               <input
@@ -1472,7 +1454,7 @@ const VideoSourceConfig = ({
             <tr>
               {/* 拖拽手柄列 */}
               <th className='w-8' />
-              
+
               {/* 批量选择列 */}
               {batchMode && (
                 <th className='w-12 px-4 py-3'>
@@ -1484,7 +1466,7 @@ const VideoSourceConfig = ({
                   />
                 </th>
               )}
-              
+
               <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
                 名称
               </th>
@@ -1543,6 +1525,7 @@ const VideoSourceConfig = ({
 
 // 新增站点配置组件
 const SiteConfigComponent = ({ config }: { config: AdminConfig | null }) => {
+  const { showSuccess, showError } = useToast();
   const [siteSettings, setSiteSettings] = useState<SiteConfig>({
     SiteName: '',
     Announcement: '',
@@ -1608,9 +1591,8 @@ const SiteConfigComponent = ({ config }: { config: AdminConfig | null }) => {
       {/* 站点名称 */}
       <div>
         <label
-          className={`block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 ${
-            isD1Storage || isUpstashStorage ? 'opacity-50' : ''
-          }`}
+          className={`block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 ${isD1Storage || isUpstashStorage ? 'opacity-50' : ''
+            }`}
         >
           站点名称
           {isD1Storage && (
@@ -1633,20 +1615,18 @@ const SiteConfigComponent = ({ config }: { config: AdminConfig | null }) => {
             setSiteSettings((prev) => ({ ...prev, SiteName: e.target.value }))
           }
           disabled={isD1Storage || isUpstashStorage}
-          className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-            isD1Storage || isUpstashStorage
+          className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent ${isD1Storage || isUpstashStorage
               ? 'opacity-50 cursor-not-allowed'
               : ''
-          }`}
+            }`}
         />
       </div>
 
       {/* 站点公告 */}
       <div>
         <label
-          className={`block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 ${
-            isD1Storage || isUpstashStorage ? 'opacity-50' : ''
-          }`}
+          className={`block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 ${isD1Storage || isUpstashStorage ? 'opacity-50' : ''
+            }`}
         >
           站点公告
           {isD1Storage && (
@@ -1672,11 +1652,10 @@ const SiteConfigComponent = ({ config }: { config: AdminConfig | null }) => {
           }
           disabled={isD1Storage || isUpstashStorage}
           rows={3}
-          className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-            isD1Storage || isUpstashStorage
+          className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent ${isD1Storage || isUpstashStorage
               ? 'opacity-50 cursor-not-allowed'
               : ''
-          }`}
+            }`}
         />
       </div>
 
@@ -1721,9 +1700,8 @@ const SiteConfigComponent = ({ config }: { config: AdminConfig | null }) => {
       {/* 图片代理 */}
       <div>
         <label
-          className={`block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 ${
-            isD1Storage || isUpstashStorage ? 'opacity-50' : ''
-          }`}
+          className={`block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 ${isD1Storage || isUpstashStorage ? 'opacity-50' : ''
+            }`}
         >
           图片代理前缀
           {isD1Storage && (
@@ -1750,11 +1728,10 @@ const SiteConfigComponent = ({ config }: { config: AdminConfig | null }) => {
             }))
           }
           disabled={isD1Storage || isUpstashStorage}
-          className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-            isD1Storage || isUpstashStorage
+          className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent ${isD1Storage || isUpstashStorage
               ? 'opacity-50 cursor-not-allowed'
               : ''
-          }`}
+            }`}
         />
         <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
           用于代理图片访问，解决跨域或访问限制问题。留空则不使用代理。
@@ -1764,9 +1741,8 @@ const SiteConfigComponent = ({ config }: { config: AdminConfig | null }) => {
       {/* 豆瓣代理设置 */}
       <div>
         <label
-          className={`block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 ${
-            isD1Storage || isUpstashStorage ? 'opacity-50' : ''
-          }`}
+          className={`block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 ${isD1Storage || isUpstashStorage ? 'opacity-50' : ''
+            }`}
         >
           豆瓣代理地址
           {isD1Storage && (
@@ -1793,11 +1769,10 @@ const SiteConfigComponent = ({ config }: { config: AdminConfig | null }) => {
             }))
           }
           disabled={isD1Storage || isUpstashStorage}
-          className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-            isD1Storage || isUpstashStorage
+          className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-green-500 focus:border-transparent ${isD1Storage || isUpstashStorage
               ? 'opacity-50 cursor-not-allowed'
               : ''
-          }`}
+            }`}
         />
         <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
           用于代理豆瓣数据访问，解决跨域或访问限制问题。留空则使用服务端API。
@@ -1809,11 +1784,10 @@ const SiteConfigComponent = ({ config }: { config: AdminConfig | null }) => {
         <button
           onClick={handleSave}
           disabled={saving || isD1Storage || isUpstashStorage}
-          className={`px-4 py-2 ${
-            saving || isD1Storage || isUpstashStorage
+          className={`px-4 py-2 ${saving || isD1Storage || isUpstashStorage
               ? 'bg-gray-400 cursor-not-allowed'
               : 'bg-green-600 hover:bg-green-700'
-          } text-white rounded-lg transition-colors`}
+            } text-white rounded-lg transition-colors`}
         >
           {saving ? '保存中…' : '保存'}
         </button>
@@ -1824,6 +1798,7 @@ const SiteConfigComponent = ({ config }: { config: AdminConfig | null }) => {
 
 function AdminPageClient() {
   const router = useRouter();
+  const { showError } = useToast();
   const [config, setConfig] = useState<AdminConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

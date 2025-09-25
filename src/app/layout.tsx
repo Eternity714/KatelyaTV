@@ -8,6 +8,7 @@ import { getConfig } from '@/lib/config';
 
 import { SiteProvider } from '../components/SiteProvider';
 import { ThemeProvider } from '../components/ThemeProvider';
+import { ToastProvider } from '../components/ToastProvider';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -101,7 +102,9 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           <SiteProvider siteName={siteName} announcement={announcement}>
-            {children}
+            <ToastProvider>
+              {children}
+            </ToastProvider>
           </SiteProvider>
         </ThemeProvider>
       </body>
