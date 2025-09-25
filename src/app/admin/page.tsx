@@ -193,20 +193,35 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
     await handleUserAction('unban', uname);
   };
 
-  const handleSetAdmin = async (uname: string) => {
-    await handleUserAction('setAdmin', uname);
-  };
+  // 统一的角色变更处理函数
+  const handleRoleChange = async (username: string, newRole: 'user' | 'vip' | 'admin') => {
+    try {
+      // 根据新角色确定需要执行的操作
+      let action: string;
+      
+      if (newRole === 'user') {
+        // 如果目标是普通用户，需要取消当前角色
+        const currentUser = config?.UserConfig.Users.find(u => u.username === username);
+        if (currentUser?.role === 'admin') {
+          action = 'cancelAdmin';
+        } else if (currentUser?.role === 'vip') {
+          action = 'cancelVip';
+        } else {
+          return; // 已经是普通用户，无需操作
+        }
+      } else if (newRole === 'vip') {
+        action = 'setVip';
+      } else if (newRole === 'admin') {
+        action = 'setAdmin';
+      } else {
+        return;
+      }
 
-  const handleRemoveAdmin = async (uname: string) => {
-    await handleUserAction('cancelAdmin', uname);
-  };
-
-  const handleSetVip = async (uname: string) => {
-    await handleUserAction('setVip', uname);
-  };
-
-  const handleRemoveVip = async (uname: string) => {
-    await handleUserAction('cancelVip', uname);
+      await handleUserAction(action as any, username);
+      showSuccess(`用户角色已更新为${newRole === 'user' ? '普通用户' : newRole === 'vip' ? 'VIP用户' : '管理员'}`);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : '角色更新失败');
+    }
   };
 
   const handleAddUser = async () => {
@@ -627,25 +642,47 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                           {user.username}
                         </td>
                         <td className='px-6 py-4 whitespace-nowrap'>
-                          <span
-                            className={`px-2 py-1 text-xs rounded-full ${
-                              user.role === 'owner'
-                                ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300'
+                          {/* 角色下拉框 - 根据权限显示不同选项 */}
+                          {canOperate ? (
+                            <select
+                              value={user.role}
+                              onChange={(e) => handleRoleChange(user.username, e.target.value as 'user' | 'vip' | 'admin')}
+                              className={`px-2 py-1 text-xs rounded-md border-0 focus:ring-2 focus:ring-blue-500 ${
+                                user.role === 'owner'
+                                  ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300'
+                                  : user.role === 'admin'
+                                  ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-800 dark:text-purple-300'
+                                  : user.role === 'vip'
+                                  ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                              }`}
+                            >
+                              <option value="user">普通用户</option>
+                              <option value="vip">VIP用户</option>
+                              {/* 只有站长可以设置管理员 */}
+                              {role === 'owner' && <option value="admin">管理员</option>}
+                            </select>
+                          ) : (
+                            <span
+                              className={`px-2 py-1 text-xs rounded-full ${
+                                user.role === 'owner'
+                                  ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300'
+                                  : user.role === 'admin'
+                                  ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-800 dark:text-purple-300'
+                                  : user.role === 'vip'
+                                  ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                              }`}
+                            >
+                              {user.role === 'owner'
+                                ? '站长'
                                 : user.role === 'admin'
-                                ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-800 dark:text-purple-300'
+                                ? '管理员'
                                 : user.role === 'vip'
-                                ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300'
-                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                            }`}
-                          >
-                            {user.role === 'owner'
-                              ? '站长'
-                              : user.role === 'admin'
-                              ? '管理员'
-                              : user.role === 'vip'
-                              ? 'VIP用户'
-                              : '普通用户'}
-                          </span>
+                                ? 'VIP用户'
+                                : '普通用户'}
+                            </span>
+                          )}
                         </td>
                         <td className='px-6 py-4 whitespace-nowrap'>
                           {(() => {
@@ -713,43 +750,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                           )}
                           {canOperate && (
                             <>
-                              {/* 其他操作按钮 */}
-                              {user.role === 'user' && (
-                                <>
-                                  <button
-                                    onClick={() => handleSetVip(user.username)}
-                                    className='inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 dark:text-blue-200 transition-colors'
-                                  >
-                                    设为VIP
-                                  </button>
-                                  <button
-                                    onClick={() => handleSetAdmin(user.username)}
-                                    className='inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 hover:bg-purple-200 dark:bg-purple-900/40 dark:hover:bg-purple-900/60 dark:text-purple-200 transition-colors'
-                                  >
-                                    设为管理
-                                  </button>
-                                </>
-                              )}
-                              {user.role === 'vip' && (
-                                <button
-                                  onClick={() =>
-                                    handleRemoveVip(user.username)
-                                  }
-                                  className='inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700/40 dark:hover:bg-gray-700/60 dark:text-gray-200 transition-colors'
-                                >
-                                  取消VIP
-                                </button>
-                              )}
-                              {user.role === 'admin' && (
-                                <button
-                                  onClick={() =>
-                                    handleRemoveAdmin(user.username)
-                                  }
-                                  className='inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700/40 dark:hover:bg-gray-700/60 dark:text-gray-200 transition-colors'
-                                >
-                                  取消管理
-                                </button>
-                              )}
+                              {/* 封禁/解封按钮 */}
                               {user.role !== 'owner' &&
                                 (!user.banned ? (
                                   <button
