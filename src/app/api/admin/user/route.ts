@@ -241,7 +241,7 @@ export async function POST(request: NextRequest) {
           });
           targetEntry =
             adminConfig.UserConfig.Users[
-              adminConfig.UserConfig.Users.length - 1
+            adminConfig.UserConfig.Users.length - 1
             ];
           break;
         }
@@ -467,7 +467,7 @@ export async function POST(request: NextRequest) {
 
           // 设置用户到期时间
           await storage.setUserExpiryTime(targetUsername!, expiryTime || null);
-          
+
           // 更新配置中的用户信息
           targetEntry.expires_at = expiryTime || null;
 

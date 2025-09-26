@@ -121,11 +121,11 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
     username: '',
     password: '',
   });
-  const [showSetExpiryForm, setShowSetExpiryForm] = useState(false);
-  const [expiryUser, setExpiryUser] = useState({
-    username: '',
-    expiryTime: '',
-  });
+  // 添加内联编辑到期时间的状态
+  const [editingExpiry, setEditingExpiry] = useState<{
+    username: string;
+    expiryTime: string;
+  } | null>(null);
 
   // 当前登录用户名
   const currentUsername = getAuthInfoFromBrowserCookie()?.username || null;
@@ -253,7 +253,8 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
     await handleUserAction('deleteUser', username);
   };
 
-  const handleShowSetExpiryForm = (username: string) => {
+  // 开始编辑到期时间
+  const handleStartEditExpiry = (username: string) => {
     const user = config?.UserConfig.Users.find(u => u.username === username);
     const currentExpiry = user?.expires_at;
 
@@ -267,23 +268,29 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
         .slice(0, 16);
     }
 
-    setExpiryUser({ username, expiryTime: formattedExpiry });
-    setShowSetExpiryForm(true);
-    setShowAddUserForm(false); // 关闭其他表单
-    setShowChangePasswordForm(false);
+    setEditingExpiry({ username, expiryTime: formattedExpiry });
   };
 
-  const handleSetUserExpiry = async () => {
-    if (!expiryUser.username) return;
-
+  // 保存到期时间
+  const handleSaveExpiry = async (username: string, expiryTime: string) => {
     // 如果输入了时间，转换为 ISO 字符串；否则设为 null（永不过期）
-    const expiryTime = expiryUser.expiryTime
-      ? new Date(expiryUser.expiryTime).toISOString()
+    const finalExpiryTime = expiryTime
+      ? new Date(expiryTime).toISOString()
       : null;
 
-    await handleUserAction('setUserExpiry', expiryUser.username, undefined, expiryTime);
-    setExpiryUser({ username: '', expiryTime: '' });
-    setShowSetExpiryForm(false);
+    await handleUserAction('setUserExpiry', username, undefined, finalExpiryTime);
+    setEditingExpiry(null);
+  };
+
+  // 清除到期时间（设为永不过期）
+  const handleClearExpiry = async (username: string) => {
+    await handleUserAction('setUserExpiry', username, undefined, null);
+    setEditingExpiry(null);
+  };
+
+  // 取消编辑到期时间
+  const handleCancelEditExpiry = () => {
+    setEditingExpiry(null);
   };
 
   // 通用请求函数
@@ -498,53 +505,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
           </div>
         )}
 
-        {/* 设置到期时间表单 */}
-        {showSetExpiryForm && (
-          <div className='mb-4 p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-700'>
-            <h5 className='text-sm font-medium text-orange-800 dark:text-orange-300 mb-3'>
-              设置用户到期时间
-            </h5>
-            <div className='flex flex-col sm:flex-row gap-4 sm:gap-3'>
-              <input
-                type='text'
-                placeholder='用户名'
-                value={expiryUser.username}
-                disabled
-                className='flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 cursor-not-allowed'
-              />
-              <input
-                type='datetime-local'
-                value={expiryUser.expiryTime}
-                onChange={(e) =>
-                  setExpiryUser((prev) => ({
-                    ...prev,
-                    expiryTime: e.target.value,
-                  }))
-                }
-                className='flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-orange-500 focus:border-transparent'
-                title='留空表示永不过期'
-              />
-              <button
-                onClick={handleSetUserExpiry}
-                className='w-full sm:w-auto px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors'
-              >
-                设置到期
-              </button>
-              <button
-                onClick={() => {
-                  setShowSetExpiryForm(false);
-                  setExpiryUser({ username: '', expiryTime: '' });
-                }}
-                className='w-full sm:w-auto px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors'
-              >
-                取消
-              </button>
-            </div>
-            <p className='text-xs text-orange-600 dark:text-orange-400 mt-2'>
-              提示：留空表示永不过期，设置时间后用户将在指定时间后无法登录
-            </p>
-          </div>
-        )}
+
 
         {/* 用户列表 */}
         <div className='border border-gray-200 dark:border-gray-700 rounded-lg max-h-[28rem] overflow-y-auto overflow-x-auto'>
@@ -705,20 +666,71 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                           })()}
                         </td>
                         <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100'>
-                          {user.expires_at ? (
-                            <div className='flex flex-col'>
-                              <span className='text-xs'>
-                                {new Date(user.expires_at).toLocaleDateString('zh-CN')}
-                              </span>
-                              <span className='text-xs text-gray-500 dark:text-gray-400'>
-                                {new Date(user.expires_at).toLocaleTimeString('zh-CN', {
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
-                              </span>
+                          {editingExpiry === user.username ? (
+                            // 编辑模式：显示时间选择器和操作按钮
+                            <div className='flex flex-col gap-2'>
+                              <input
+                                type='datetime-local'
+                                value={(() => {
+                                  if (!user.expires_at) return '';
+                                  const date = new Date(user.expires_at);
+                                  // 转换为本地时间的 datetime-local 格式
+                                  const year = date.getFullYear();
+                                  const month = String(date.getMonth() + 1).padStart(2, '0');
+                                  const day = String(date.getDate()).padStart(2, '0');
+                                  const hours = String(date.getHours()).padStart(2, '0');
+                                  const minutes = String(date.getMinutes()).padStart(2, '0');
+                                  return `${year}-${month}-${day}T${hours}:${minutes}`;
+                                })()}
+                                onChange={(e) => {
+                                  const newValue = e.target.value;
+                                  if (newValue) {
+                                    handleSaveExpiry(user.username, newValue);
+                                  }
+                                }}
+                                className='w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-orange-500 focus:border-transparent'
+                                title='选择到期时间'
+                              />
+                              <div className='flex gap-1'>
+                                <button
+                                  onClick={() => handleClearExpiry(user.username)}
+                                  className='px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors'
+                                  title='清除到期时间（永不过期）'
+                                >
+                                  清除
+                                </button>
+                                <button
+                                  onClick={() => handleCancelEditExpiry()}
+                                  className='px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors'
+                                  title='取消编辑'
+                                >
+                                  取消
+                                </button>
+                              </div>
                             </div>
                           ) : (
-                            <span className='text-xs text-gray-500 dark:text-gray-400'>永不过期</span>
+                            // 显示模式：点击可编辑
+                            <div 
+                              className='cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 py-1 transition-colors'
+                              onClick={() => handleStartEditExpiry(user.username)}
+                              title='点击编辑到期时间'
+                            >
+                              {user.expires_at ? (
+                                <div className='flex flex-col'>
+                                  <span className='text-xs'>
+                                    {new Date(user.expires_at).toLocaleDateString('zh-CN')}
+                                  </span>
+                                  <span className='text-xs text-gray-500 dark:text-gray-400'>
+                                    {new Date(user.expires_at).toLocaleTimeString('zh-CN', {
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className='text-xs text-gray-500 dark:text-gray-400'>永不过期</span>
+                              )}
+                            </div>
                           )}
                         </td>
                         <td className='px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2'>
@@ -733,15 +745,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                               修改密码
                             </button>
                           )}
-                          {/* 设置到期时间按钮 */}
-                          {canOperate && (
-                            <button
-                              onClick={() => handleShowSetExpiryForm(user.username)}
-                              className='inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 hover:bg-orange-200 dark:bg-orange-900/40 dark:hover:bg-orange-900/60 dark:text-orange-200 transition-colors'
-                            >
-                              设置到期
-                            </button>
-                          )}
+
                           {canOperate && (
                             <>
                               {/* 封禁/解封按钮 */}

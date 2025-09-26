@@ -186,9 +186,9 @@ export async function POST(req: NextRequest) {
           const expiry = new Date(expiryTime);
           if (now > expiry) {
             return NextResponse.json(
-              { 
+              {
                 error: '您的账户已过期，无法登录。请联系站长续期。',
-                expired: true 
+                expired: true
               },
               { status: 401 }
             );
