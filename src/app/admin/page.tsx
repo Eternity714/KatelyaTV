@@ -173,11 +173,21 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
   };
 
   const handleBanUser = async (uname: string) => {
-    await handleUserAction('ban', uname);
+    try {
+      await handleUserAction('ban', uname);
+      showSuccess(`用户 ${uname} 已成功封禁`);
+    } catch (err) {
+      // 错误处理已在 handleUserAction 中完成
+    }
   };
 
   const handleUnbanUser = async (uname: string) => {
-    await handleUserAction('unban', uname);
+    try {
+      await handleUserAction('unban', uname);
+      showSuccess(`用户 ${uname} 已成功解封`);
+    } catch (err) {
+      // 错误处理已在 handleUserAction 中完成
+    }
   };
 
   // 统一的角色变更处理函数
@@ -213,20 +223,30 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
 
   const handleAddUser = async () => {
     if (!newUser.username || !newUser.password) return;
-    await handleUserAction('add', newUser.username, newUser.password);
-    setNewUser({ username: '', password: '' });
-    setShowAddUserForm(false);
+    try {
+      await handleUserAction('add', newUser.username, newUser.password);
+      setNewUser({ username: '', password: '' });
+      setShowAddUserForm(false);
+      showSuccess(`用户 ${newUser.username} 添加成功`);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : '添加用户失败');
+    }
   };
 
   const handleChangePassword = async () => {
     if (!changePasswordUser.username || !changePasswordUser.password) return;
-    await handleUserAction(
-      'changePassword',
-      changePasswordUser.username,
-      changePasswordUser.password
-    );
-    setChangePasswordUser({ username: '', password: '' });
-    setShowChangePasswordForm(false);
+    try {
+      await handleUserAction(
+        'changePassword',
+        changePasswordUser.username,
+        changePasswordUser.password
+      );
+      setChangePasswordUser({ username: '', password: '' });
+      setShowChangePasswordForm(false);
+      showSuccess(`用户 ${changePasswordUser.username} 密码修改成功`);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : '密码修改失败');
+    }
   };
 
   const handleShowChangePasswordForm = (username: string) => {
@@ -248,7 +268,12 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
 
     if (!isConfirmed) return;
 
-    await handleUserAction('deleteUser', username);
+    try {
+      await handleUserAction('deleteUser', username);
+      showSuccess(`用户 ${username} 删除成功`);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : '删除用户失败');
+    }
   };
 
   // 开始编辑到期时间
@@ -272,20 +297,30 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
 
   // 保存到期时间
   const handleSaveExpiry = async (username: string) => {
-    // 如果输入了时间，转换为 ISO 字符串；否则设为 null（永不过期）
-    const finalExpiryTime = editingExpiryTime
-      ? new Date(editingExpiryTime).toISOString()
-      : null;
+    try {
+      // 如果输入了时间，转换为 ISO 字符串；否则设为 null（永不过期）
+      const finalExpiryTime = editingExpiryTime
+        ? new Date(editingExpiryTime).toISOString()
+        : null;
 
-    await handleUserAction('setUserExpiry', username, undefined, finalExpiryTime);
-    setEditingExpiry(null);
-    setEditingExpiryTime('');
+      await handleUserAction('setUserExpiry', username, undefined, finalExpiryTime);
+      setEditingExpiry(null);
+      setEditingExpiryTime('');
+      showSuccess(`用户 ${username} 到期时间设置成功`);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : '设置到期时间失败');
+    }
   };
 
   // 清除到期时间（设为永不过期）
   const handleClearExpiry = async (username: string) => {
-    await handleUserAction('setUserExpiry', username, undefined, null);
-    setEditingExpiry(null);
+    try {
+      await handleUserAction('setUserExpiry', username, undefined, null);
+      setEditingExpiry(null);
+      showSuccess(`用户 ${username} 已设为永不过期`);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : '清除到期时间失败');
+    }
   };
 
   // 取消编辑到期时间
@@ -311,28 +346,24 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
     targetPassword?: string,
     expiryTime?: string | null
   ) => {
-    try {
-      const res = await fetch('/api/admin/user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          targetUsername,
-          ...(targetPassword ? { targetPassword } : {}),
-          ...(expiryTime !== undefined ? { expiryTime } : {}),
-          action,
-        }),
-      });
+    const res = await fetch('/api/admin/user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetUsername,
+        ...(targetPassword ? { targetPassword } : {}),
+        ...(expiryTime !== undefined ? { expiryTime } : {}),
+        action,
+      }),
+    });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `操作失败: ${res.status}`);
-      }
-
-      // 成功后刷新配置（无需整页刷新）
-      await refreshConfig();
-    } catch (err) {
-      showError(err instanceof Error ? err.message : '操作失败');
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `操作失败: ${res.status}`);
     }
+
+    // 成功后刷新配置（无需整页刷新）
+    await refreshConfig();
   };
 
   if (!config) {
