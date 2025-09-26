@@ -39,7 +39,11 @@ interface D1ExecResult {
 
 // 获取全局D1数据库实例
 function getD1Database(): D1Database {
-  return (process.env as any).DB as D1Database;
+  const db = (process.env as any).DB as D1Database;
+  if (!db) {
+    throw new Error('D1 数据库未配置。在本地开发环境中，请使用 wrangler dev 启动服务器，或将存储类型改为 localstorage。');
+  }
+  return db;
 }
 
 export class D1Storage implements IStorage {
