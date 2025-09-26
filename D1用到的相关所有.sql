@@ -225,9 +225,7 @@ INSERT OR IGNORE INTO admin_configs (config_key, config_value, description) VALU
 -- 第六部分：数据迁移脚本
 -- =============================================
 
--- 为现有用户表添加 banned 字段（如果不存在）
--- 注意：SQLite 的 ALTER TABLE ADD COLUMN 语法
-ALTER TABLE users ADD COLUMN banned BOOLEAN DEFAULT 0;
+-- 注意：banned 字段已在 users 表定义中包含，无需额外添加
 
 -- 注意：Cloudflare D1 不支持直接使用 SQL 的 BEGIN TRANSACTION 语句
 -- 应使用 JavaScript API: state.storage.transaction() 或 state.storage.transactionSync()
