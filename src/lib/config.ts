@@ -323,11 +323,12 @@ export async function getConfig(): Promise<AdminConfig> {
       (adminConfig.UserConfig.Users || []).map((u) => u.username)
     );
     
-    // 为新用户获取角色和到期时间信息
+    // 为新用户获取角色、到期时间和封禁状态信息
     for (const uname of userNames) {
       if (!existedUsers.has(uname)) {
         let userRole = 'user';
         let expiresAt: string | null = null;
+        let banned = false;
         
         try {
           // 获取用户角色
@@ -340,19 +341,25 @@ export async function getConfig(): Promise<AdminConfig> {
           if (storage && typeof (storage as any).getUserExpiryTime === 'function') {
             expiresAt = await (storage as any).getUserExpiryTime(uname);
           }
+          
+          // 获取用户封禁状态
+          if (storage && typeof (storage as any).getUserBanned === 'function') {
+            banned = await (storage as any).getUserBanned(uname);
+          }
         } catch (e) {
-          console.error(`获取用户 ${uname} 的角色和到期时间失败:`, e);
+          console.error(`获取用户 ${uname} 的角色、到期时间和封禁状态失败:`, e);
         }
         
         adminConfig!.UserConfig.Users.push({
           username: uname,
           role: userRole as 'user' | 'vip' | 'admin' | 'owner',
+          banned,
           expires_at: expiresAt,
         });
       }
     }
     
-    // 更新现有用户的角色和到期时间信息
+    // 更新现有用户的角色、到期时间和封禁状态信息
     for (const user of adminConfig.UserConfig.Users) {
       if (user.username !== process.env.USERNAME) { // 跳过站长用户
         try {
@@ -366,8 +373,13 @@ export async function getConfig(): Promise<AdminConfig> {
           if (storage && typeof (storage as any).getUserExpiryTime === 'function') {
             user.expires_at = await (storage as any).getUserExpiryTime(user.username);
           }
+          
+          // 获取用户封禁状态
+          if (storage && typeof (storage as any).getUserBanned === 'function') {
+            user.banned = await (storage as any).getUserBanned(user.username);
+          }
         } catch (e) {
-          console.error(`更新用户 ${user.username} 的角色和到期时间失败:`, e);
+          console.error(`更新用户 ${user.username} 的角色、到期时间和封禁状态失败:`, e);
         }
       }
     }
