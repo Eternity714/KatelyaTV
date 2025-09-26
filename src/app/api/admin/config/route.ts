@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AdminConfigResult } from '@/lib/admin.types';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig } from '@/lib/config';
+import { db } from '@/lib/db';
 
 export const runtime = 'edge';
 
@@ -34,13 +35,22 @@ export async function GET(request: NextRequest) {
     if (username === process.env.USERNAME) {
       result.Role = 'owner';
     } else {
-      const user = config.UserConfig.Users.find((u) => u.username === username);
-      if (user && user.role === 'admin') {
-        result.Role = 'admin';
-      } else {
+      // 从数据库获取用户角色
+      try {
+        const userRole = await db.getUserRole(username);
+        if (userRole === 'admin' || userRole === 'owner') {
+          result.Role = userRole as 'admin' | 'owner';
+        } else {
+          return NextResponse.json(
+            { error: '你是管理员吗你就访问？' },
+            { status: 401 }
+          );
+        }
+      } catch (error) {
+        console.error('获取用户角色失败:', error);
         return NextResponse.json(
-          { error: '你是管理员吗你就访问？' },
-          { status: 401 }
+          { error: '获取用户信息失败' },
+          { status: 500 }
         );
       }
     }

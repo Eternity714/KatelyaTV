@@ -97,13 +97,6 @@ export async function POST(req: NextRequest) {
 
       await db.registerUser(username, password);
 
-      // 添加到配置中并保存
-      config.UserConfig.Users.push({
-        username,
-        role: 'user',
-      });
-      await db.saveAdminConfig(config);
-
       // 注册成功，设置认证cookie
       const response = NextResponse.json({ ok: true });
       const cookieValue = await generateAuthCookie(username);

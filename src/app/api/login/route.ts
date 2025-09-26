@@ -162,12 +162,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '用户名或密码错误' }, { status: 401 });
     }
 
-    const config = await getConfig();
-    const user = config.UserConfig.Users.find((u) => u.username === username);
-    if (user && user.banned) {
-      return NextResponse.json({ error: '用户被封禁' }, { status: 401 });
-    }
-
     // 校验用户密码
     try {
       const pass = await db.verifyUser(username, password);
@@ -177,6 +171,20 @@ export async function POST(req: NextRequest) {
           { status: 401 }
         );
       }
+
+      // 从数据库获取用户角色
+      let userRole: string = 'user';
+      try {
+        const role = await db.getUserRole(username);
+        if (role) {
+          userRole = role;
+        }
+      } catch (roleError) {
+        console.error('获取用户角色失败:', roleError);
+        // 如果获取角色失败，使用默认角色 'user'
+      }
+
+      // TODO: 检查用户是否被封禁（需要在数据库中实现 banned 字段）
 
       // 检查用户是否已过期
       try {
@@ -205,7 +213,7 @@ export async function POST(req: NextRequest) {
       const cookieValue = await generateAuthCookie(
         username,
         password,
-        user?.role || 'user',
+        userRole as 'owner' | 'admin' | 'vip' | 'user',
         false
       ); // 数据库模式不包含 password
       const expires = new Date();

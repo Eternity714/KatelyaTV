@@ -36,42 +36,46 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '缺少用户名参数' }, { status: 400 });
     }
 
-    // 获取配置与存储
-    const adminConfig = await getConfig();
+    // 获取存储
     const storage = getStorage();
+    if (!storage) {
+      return NextResponse.json({ error: '存储未配置' }, { status: 500 });
+    }
 
     // 判定操作者角色
     let operatorRole: 'owner' | 'admin';
     if (username === process.env.USERNAME) {
       operatorRole = 'owner';
     } else {
-      const userEntry = adminConfig.UserConfig.Users.find(
-        (u) => u.username === username
-      );
-      if (!userEntry || userEntry.role !== 'admin') {
+      // 从数据库获取操作者角色
+      const operatorUserRole = await storage.getUserRole(username);
+      if (!operatorUserRole || operatorUserRole !== 'admin') {
         return NextResponse.json({ error: '权限不足' }, { status: 401 });
       }
       operatorRole = 'admin';
     }
 
-    // 查找目标用户
-    const targetEntry = adminConfig.UserConfig.Users.find(
-      (u) => u.username === targetUsername
-    );
-
-    if (!targetEntry) {
+    // 检查目标用户是否存在
+    const userExists = await storage.checkUserExist(targetUsername);
+    if (!userExists) {
       return NextResponse.json({ error: '用户不存在' }, { status: 404 });
     }
 
+    // 获取目标用户角色
+    const targetUserRole = await storage.getUserRole(targetUsername);
+    if (!targetUserRole) {
+      return NextResponse.json({ error: '无法获取用户角色' }, { status: 500 });
+    }
+
     // 权限检查：管理员不能查看其他管理员的信息（除非是站长）
-    const isTargetAdmin = targetEntry.role === 'admin';
+    const isTargetAdmin = targetUserRole === 'admin';
     if (isTargetAdmin && operatorRole !== 'owner' && username !== targetUsername) {
       return NextResponse.json({ error: '权限不足' }, { status: 401 });
     }
 
     // 获取用户到期时间
     let expiryTime: string | null = null;
-    if (storage && typeof storage.getUserExpiryTime === 'function') {
+    if (typeof storage.getUserExpiryTime === 'function') {
       try {
         expiryTime = await storage.getUserExpiryTime(targetUsername);
       } catch (error) {
@@ -80,9 +84,9 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      username: targetEntry.username,
-      role: targetEntry.role,
-      banned: targetEntry.banned || false,
+      username: targetUsername,
+      role: targetUserRole,
+      banned: false, // TODO: 需要在数据库中添加 banned 字段支持
       expires_at: expiryTime,
     });
   } catch (error) {
@@ -178,36 +182,43 @@ export async function POST(request: NextRequest) {
     // 获取配置与存储
     const adminConfig = await getConfig();
     const storage: IStorage | null = getStorage();
+    if (!storage) {
+      return NextResponse.json({ error: '存储未配置' }, { status: 500 });
+    }
 
     // 判定操作者角色
     let operatorRole: 'owner' | 'admin';
     if (username === process.env.USERNAME) {
       operatorRole = 'owner';
     } else {
-      const userEntry = adminConfig.UserConfig.Users.find(
-        (u) => u.username === username
-      );
-      if (!userEntry || userEntry.role !== 'admin') {
+      // 从数据库获取操作者角色
+      const operatorUserRole = await storage.getUserRole(username);
+      if (!operatorUserRole || operatorUserRole !== 'admin') {
         return NextResponse.json({ error: '权限不足' }, { status: 401 });
       }
       operatorRole = 'admin';
     }
 
-    // 查找目标用户条目
-    let targetEntry = adminConfig.UserConfig.Users.find(
-      (u) => u.username === targetUsername
-    );
+    // 检查目标用户是否存在（除了添加用户操作）
+    let targetUserExists = false;
+    let targetUserRole: string | null = null;
+    if (action !== 'add' && targetUsername) {
+      targetUserExists = await storage.checkUserExist(targetUsername);
+      if (targetUserExists) {
+        targetUserRole = await storage.getUserRole(targetUsername);
+      }
+    }
 
+    // 检查是否试图操作站长
     if (
-      targetEntry &&
-      targetEntry.role === 'owner' &&
+      targetUserRole === 'owner' &&
       action !== 'changePassword'
     ) {
       return NextResponse.json({ error: '无法操作站长' }, { status: 400 });
     }
 
     // 权限校验逻辑
-    const isTargetAdmin = targetEntry?.role === 'admin';
+    const isTargetAdmin = targetUserRole === 'admin';
 
     if (action === 'setAllowRegister') {
       if (typeof allowRegister !== 'boolean') {
@@ -218,7 +229,9 @@ export async function POST(request: NextRequest) {
     } else {
       switch (action) {
         case 'add': {
-          if (targetEntry) {
+          // 检查用户是否已存在
+          const userExists = await storage.checkUserExist(targetUsername!);
+          if (userExists) {
             return NextResponse.json({ error: '用户已存在' }, { status: 400 });
           }
           if (!targetPassword) {
@@ -227,26 +240,21 @@ export async function POST(request: NextRequest) {
               { status: 400 }
             );
           }
-          if (!storage || typeof storage.registerUser !== 'function') {
+          if (typeof storage.registerUser !== 'function') {
             return NextResponse.json(
               { error: '存储未配置用户注册' },
               { status: 500 }
             );
           }
+          // 注册用户（角色默认为 'user'）
           await storage.registerUser(targetUsername!, targetPassword);
-          // 更新配置
-          adminConfig.UserConfig.Users.push({
-            username: targetUsername!,
-            role: 'user',
-          });
-          targetEntry =
-            adminConfig.UserConfig.Users[
-            adminConfig.UserConfig.Users.length - 1
-            ];
+          // 更新本地变量以便后续权限检查
+          targetUserExists = true;
+          targetUserRole = 'user';
           break;
         }
         case 'ban': {
-          if (!targetEntry) {
+          if (!targetUserExists) {
             return NextResponse.json(
               { error: '目标用户不存在' },
               { status: 404 }
@@ -261,11 +269,14 @@ export async function POST(request: NextRequest) {
               );
             }
           }
-          targetEntry.banned = true;
-          break;
+          // TODO: 需要在数据库中实现 banned 字段支持
+          return NextResponse.json(
+            { error: 'banned 功能暂未实现' },
+            { status: 501 }
+          );
         }
         case 'unban': {
-          if (!targetEntry) {
+          if (!targetUserExists) {
             return NextResponse.json(
               { error: '目标用户不存在' },
               { status: 404 }
@@ -279,17 +290,20 @@ export async function POST(request: NextRequest) {
               );
             }
           }
-          targetEntry.banned = false;
-          break;
+          // TODO: 需要在数据库中实现 banned 字段支持
+          return NextResponse.json(
+            { error: 'banned 功能暂未实现' },
+            { status: 501 }
+          );
         }
         case 'setAdmin': {
-          if (!targetEntry) {
+          if (!targetUserExists) {
             return NextResponse.json(
               { error: '目标用户不存在' },
               { status: 404 }
             );
           }
-          if (targetEntry.role === 'admin') {
+          if (targetUserRole === 'admin') {
             return NextResponse.json(
               { error: '该用户已是管理员' },
               { status: 400 }
@@ -301,17 +315,19 @@ export async function POST(request: NextRequest) {
               { status: 401 }
             );
           }
-          targetEntry.role = 'admin';
+          // 更新数据库中的角色
+          await storage.setUserRole(targetUsername!, 'admin');
+          targetUserRole = 'admin';
           break;
         }
         case 'cancelAdmin': {
-          if (!targetEntry) {
+          if (!targetUserExists) {
             return NextResponse.json(
               { error: '目标用户不存在' },
               { status: 404 }
             );
           }
-          if (targetEntry.role !== 'admin') {
+          if (targetUserRole !== 'admin') {
             return NextResponse.json(
               { error: '目标用户不是管理员' },
               { status: 400 }
@@ -323,46 +339,50 @@ export async function POST(request: NextRequest) {
               { status: 401 }
             );
           }
-          targetEntry.role = 'user';
+          // 更新数据库中的角色
+          await storage.setUserRole(targetUsername!, 'user');
+          targetUserRole = 'user';
           break;
         }
         case 'setVip': {
-          if (!targetEntry) {
+          if (!targetUserExists) {
             return NextResponse.json(
               { error: '目标用户不存在' },
               { status: 404 }
             );
           }
           // 不能将站长设为VIP用户，但可以将普通用户和管理员设为VIP用户
-          if (targetEntry.role === 'owner') {
+          if (targetUserRole === 'owner') {
             return NextResponse.json(
               { error: '不能将站长设为VIP用户' },
               { status: 400 }
             );
           }
           // 管理员和站长都可以设置VIP用户
-          targetEntry.role = 'vip';
+          await storage.setUserRole(targetUsername!, 'vip');
+          targetUserRole = 'vip';
           break;
         }
         case 'cancelVip': {
-          if (!targetEntry) {
+          if (!targetUserExists) {
             return NextResponse.json(
               { error: '目标用户不存在' },
               { status: 404 }
             );
           }
-          if (targetEntry.role !== 'vip') {
+          if (targetUserRole !== 'vip') {
             return NextResponse.json(
               { error: '目标用户不是VIP用户' },
               { status: 400 }
             );
           }
           // 管理员和站长都可以取消VIP用户
-          targetEntry.role = 'user';
+          await storage.setUserRole(targetUsername!, 'user');
+          targetUserRole = 'user';
           break;
         }
         case 'changePassword': {
-          if (!targetEntry) {
+          if (!targetUserExists) {
             return NextResponse.json(
               { error: '目标用户不存在' },
               { status: 404 }
@@ -373,7 +393,7 @@ export async function POST(request: NextRequest) {
           }
 
           // 权限检查：不允许修改站长密码
-          if (targetEntry.role === 'owner') {
+          if (targetUserRole === 'owner') {
             return NextResponse.json(
               { error: '无法修改站长密码' },
               { status: 401 }
@@ -391,7 +411,7 @@ export async function POST(request: NextRequest) {
             );
           }
 
-          if (!storage || typeof storage.changePassword !== 'function') {
+          if (typeof storage.changePassword !== 'function') {
             return NextResponse.json(
               { error: '存储未配置密码修改功能' },
               { status: 500 }
@@ -402,7 +422,7 @@ export async function POST(request: NextRequest) {
           break;
         }
         case 'deleteUser': {
-          if (!targetEntry) {
+          if (!targetUserExists) {
             return NextResponse.json(
               { error: '目标用户不存在' },
               { status: 404 }
@@ -424,7 +444,7 @@ export async function POST(request: NextRequest) {
             );
           }
 
-          if (!storage || typeof storage.deleteUser !== 'function') {
+          if (typeof storage.deleteUser !== 'function') {
             return NextResponse.json(
               { error: '存储未配置用户删除功能' },
               { status: 500 }
@@ -432,19 +452,10 @@ export async function POST(request: NextRequest) {
           }
 
           await storage.deleteUser(targetUsername!);
-
-          // 从配置中移除用户
-          const userIndex = adminConfig.UserConfig.Users.findIndex(
-            (u) => u.username === targetUsername
-          );
-          if (userIndex > -1) {
-            adminConfig.UserConfig.Users.splice(userIndex, 1);
-          }
-
           break;
         }
         case 'setUserExpiry': {
-          if (!targetEntry) {
+          if (!targetUserExists) {
             return NextResponse.json(
               { error: '目标用户不存在' },
               { status: 404 }
@@ -459,7 +470,7 @@ export async function POST(request: NextRequest) {
             );
           }
 
-          if (!storage || typeof storage.setUserExpiryTime !== 'function') {
+          if (typeof storage.setUserExpiryTime !== 'function') {
             return NextResponse.json(
               { error: '存储未配置用户到期时间功能' },
               { status: 500 }
@@ -468,10 +479,6 @@ export async function POST(request: NextRequest) {
 
           // 设置用户到期时间
           await storage.setUserExpiryTime(targetUsername!, expiryTime || null);
-
-          // 更新配置中的用户信息
-          targetEntry.expires_at = expiryTime || null;
-
           break;
         }
         default:
@@ -479,9 +486,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 将更新后的配置写入数据库
-    if (storage && typeof (storage as any).setAdminConfig === 'function') {
-      await (storage as any).setAdminConfig(adminConfig);
+    // 只有 setAllowRegister 操作需要保存配置文件
+    if (action === 'setAllowRegister') {
+      if (typeof (storage as any).setAdminConfig === 'function') {
+        await (storage as any).setAdminConfig(adminConfig);
+      }
     }
 
     return NextResponse.json(

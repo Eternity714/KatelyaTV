@@ -152,6 +152,21 @@ export class DbManager {
     return this.storage.checkUserExist(userName);
   }
 
+  // 获取用户角色
+  async getUserRole(userName: string): Promise<string | null> {
+    if (typeof (this.storage as any).getUserRole === 'function') {
+      return (this.storage as any).getUserRole(userName);
+    }
+    return null;
+  }
+
+  // 设置用户角色
+  async setUserRole(userName: string, role: string): Promise<void> {
+    if (typeof (this.storage as any).setUserRole === 'function') {
+      await (this.storage as any).setUserRole(userName, role);
+    }
+  }
+
   // ---------- 用户到期时间 ----------
   async getUserExpiryTime(userName: string): Promise<string | null> {
     if (typeof (this.storage as any).getUserExpiryTime === 'function') {

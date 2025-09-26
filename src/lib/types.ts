@@ -94,6 +94,10 @@ export interface IStorage {
   changePassword(userName: string, newPassword: string): Promise<void>;
   // 删除用户（包括密码、搜索历史、播放记录、收藏夹）
   deleteUser(userName: string): Promise<void>;
+  // 获取用户角色
+  getUserRole(userName: string): Promise<string | null>;
+  // 设置用户角色
+  setUserRole(userName: string, role: string): Promise<void>;
 
   // 用户设置相关
   getUserSettings(userName: string): Promise<UserSettings | null>;

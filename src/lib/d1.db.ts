@@ -276,8 +276,8 @@ export class D1Storage implements IStorage {
     try {
       const db = await this.getDatabase();
       await db
-        .prepare('INSERT INTO users (username, password) VALUES (?, ?)')
-        .bind(userName, password)
+        .prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)')
+        .bind(userName, password, 'user')
         .run();
     } catch (err) {
       console.error('Failed to register user:', err);
@@ -311,6 +311,36 @@ export class D1Storage implements IStorage {
       return result !== null;
     } catch (err) {
       console.error('Failed to check user existence:', err);
+      throw err;
+    }
+  }
+
+  // 获取用户角色
+  async getUserRole(userName: string): Promise<string | null> {
+    try {
+      const db = await this.getDatabase();
+      const result = await db
+        .prepare('SELECT role FROM users WHERE username = ?')
+        .bind(userName)
+        .first<{ role: string }>();
+
+      return result?.role || null;
+    } catch (err) {
+      console.error('Failed to get user role:', err);
+      throw err;
+    }
+  }
+
+  // 设置用户角色
+  async setUserRole(userName: string, role: string): Promise<void> {
+    try {
+      const db = await this.getDatabase();
+      await db
+        .prepare('UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE username = ?')
+        .bind(role, userName)
+        .run();
+    } catch (err) {
+      console.error('Failed to set user role:', err);
       throw err;
     }
   }

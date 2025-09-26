@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT UNIQUE NOT NULL,
   password TEXT NOT NULL,
+  role TEXT DEFAULT 'user' CHECK (role IN ('user', 'vip', 'admin', 'owner')), -- 用户角色：user(普通用户), vip(VIP用户), admin(管理员), owner(站长)
   expires_at DATETIME DEFAULT NULL, -- 用户到期时间，NULL表示永不过期
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -155,6 +156,7 @@ CREATE TABLE IF NOT EXISTS source_configs (
 -- 用户表索引
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_expires_at ON users(expires_at);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 
 -- 用户设置索引
 CREATE INDEX IF NOT EXISTS idx_user_settings_username ON user_settings(username);

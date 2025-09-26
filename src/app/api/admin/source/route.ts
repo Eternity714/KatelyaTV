@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig, getAvailableApiSites } from '@/lib/config';
-import { getStorage } from '@/lib/db';
+import { getStorage, db } from '@/lib/db';
 import { IStorage, SourceConfig } from '@/lib/types';
 
 export const runtime = 'edge';
@@ -28,11 +28,14 @@ export async function GET(request: NextRequest) {
     
     // 权限校验
     if (username !== process.env.USERNAME) {
-      const userEntry = adminConfig.UserConfig.Users.find(
-        (u) => u.username === username
-      );
-      if (!userEntry || userEntry.role !== 'admin') {
-        return NextResponse.json({ error: '权限不足' }, { status: 401 });
+      try {
+        const userRole = await db.getUserRole(username);
+        if (userRole !== 'admin' && userRole !== 'owner') {
+          return NextResponse.json({ error: '权限不足' }, { status: 401 });
+        }
+      } catch (error) {
+        console.error('获取用户角色失败:', error);
+        return NextResponse.json({ error: '获取用户信息失败' }, { status: 500 });
       }
     }
 
@@ -118,11 +121,14 @@ export async function POST(request: NextRequest) {
 
     // 权限与身份校验
     if (username !== process.env.USERNAME) {
-      const userEntry = adminConfig.UserConfig.Users.find(
-        (u) => u.username === username
-      );
-      if (!userEntry || userEntry.role !== 'admin') {
-        return NextResponse.json({ error: '权限不足' }, { status: 401 });
+      try {
+        const userRole = await db.getUserRole(username);
+        if (userRole !== 'admin' && userRole !== 'owner') {
+          return NextResponse.json({ error: '权限不足' }, { status: 401 });
+        }
+      } catch (error) {
+        console.error('获取用户角色失败:', error);
+        return NextResponse.json({ error: '获取用户信息失败' }, { status: 500 });
       }
     }
 
