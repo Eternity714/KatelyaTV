@@ -528,6 +528,113 @@ img {
   outline-offset: 2px;
 }
 
+/* 移动端播放器全屏样式优化 */
+.art-video-player {
+  /* 确保播放器在移动端能够正确全屏 */
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* 移动端全屏时的样式 */
+.art-video-player.art-fullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 9999 !important;
+  background: #000 !important;
+}
+
+/* 移动端全屏时隐藏其他元素 */
+.art-video-player.art-fullscreen ~ * {
+  display: none !important;
+}
+
+/* 移动端视频元素全屏优化 */
+.art-video-player video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+}
+
+/* iOS Safari 全屏优化 */
+@supports (-webkit-touch-callout: none) {
+  .art-video-player video {
+    -webkit-playsinline: true;
+    playsinline: true;
+  }
+  
+  /* iOS 全屏时确保视频填满屏幕 */
+  .art-video-player.art-fullscreen video {
+    width: 100vw !important;
+    height: 100vh !important;
+    object-fit: cover !important;
+  }
+}
+
+/* Android 微信浏览器全屏优化 */
+.art-video-player video[x5-video-player-type="h5"] {
+  object-fit: contain !important;
+}
+
+/* 自定义全屏按钮样式 */
+.mobile-fullscreen-btn {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  z-index: 1000;
+  transition: background-color 0.2s ease;
+}
+
+.mobile-fullscreen-btn:hover {
+  background: rgba(0, 0, 0, 0.9);
+}
+
+.mobile-fullscreen-btn:active {
+  transform: scale(0.95);
+}
+
+/* 移动端全屏激活状态样式 */
+.mobile-fullscreen-active {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 9999 !important;
+  background: #000 !important;
+}
+
+.mobile-fullscreen-active video {
+  width: 100vw !important;
+  height: 100vh !important;
+  object-fit: contain !important;
+}
+
+/* 移动端横屏时的优化 */
+@media screen and (orientation: landscape) and (max-height: 700px) {
+  .art-video-player.art-fullscreen {
+    height: 100vh !important;
+  }
+  
+  .art-video-player.art-fullscreen video {
+    height: 100vh !important;
+    object-fit: cover !important;
+  }
+  
+  .mobile-fullscreen-active video {
+    object-fit: cover !important;
+  }
+}
+
 /* 减少动画偏好 */
 @media (prefers-reduced-motion: reduce) {
   *,
