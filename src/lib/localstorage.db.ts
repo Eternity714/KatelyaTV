@@ -486,10 +486,41 @@ export class LocalStorage implements IStorage {
       const expiryKey = this.getStorageKey('expiry', userName);
       keysToDelete.push(expiryKey);
       
+      // 删除用户角色
+      const roleKey = this.getStorageKey('role', userName);
+      keysToDelete.push(roleKey);
+      
       // 批量删除
       keysToDelete.forEach(key => localStorage.removeItem(key));
     } catch (error) {
       console.error('Error deleting user:', error);
+    }
+  }
+
+  // ---------- 用户角色 ----------
+  // 获取用户角色
+  async getUserRole(userName: string): Promise<string | null> {
+    if (typeof window === 'undefined') return null;
+    
+    try {
+      const storageKey = this.getStorageKey('role', userName);
+      const role = localStorage.getItem(storageKey);
+      return role || null;
+    } catch (error) {
+      console.error('Error getting user role:', error);
+      return null;
+    }
+  }
+
+  // 设置用户角色
+  async setUserRole(userName: string, role: string): Promise<void> {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const storageKey = this.getStorageKey('role', userName);
+      localStorage.setItem(storageKey, role);
+    } catch (error) {
+      console.error('Error setting user role:', error);
     }
   }
 

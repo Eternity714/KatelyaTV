@@ -203,6 +203,12 @@ export class RedisStorage implements IStorage {
     // 删除用户密码
     await withRetry(() => this.client.del(this.userPwdKey(userName)));
 
+    // 删除用户角色
+    await withRetry(() => this.client.del(this.userRoleKey(userName)));
+
+    // 删除用户到期时间
+    await withRetry(() => this.client.del(this.userExpiryKey(userName)));
+
     // 删除搜索历史
     await withRetry(() => this.client.del(this.shKey(userName)));
 
@@ -226,6 +232,26 @@ export class RedisStorage implements IStorage {
 
     // 删除用户设置
     await withRetry(() => this.client.del(this.userSettingsKey(userName)));
+  }
+
+  // ---------- 用户角色 ----------
+  private userRoleKey(user: string) {
+    return `u:${user}:role`; // u:username:role
+  }
+
+  // 获取用户角色
+  async getUserRole(userName: string): Promise<string | null> {
+    const role = await withRetry(() =>
+      this.client.get(this.userRoleKey(userName))
+    );
+    return role ? ensureString(role) : null;
+  }
+
+  // 设置用户角色
+  async setUserRole(userName: string, role: string): Promise<void> {
+    await withRetry(() =>
+      this.client.set(this.userRoleKey(userName), role)
+    );
   }
 
   // ---------- 用户设置 ----------
