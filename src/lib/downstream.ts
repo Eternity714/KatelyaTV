@@ -15,176 +15,235 @@ interface ApiSearchItem {
   type_name?: string;
 }
 
+// 优化的搜索配置
+const SEARCH_CONFIG = {
+  TIMEOUT: 6000, // 减少超时时间到6秒
+  MAX_PAGES: 2, // 减少最大页数到2页，提高响应速度
+  RETRY_ATTEMPTS: 1, // 添加重试机制
+  CONCURRENT_REQUESTS: 3, // 并发请求限制
+};
+
+// 带重试的fetch函数
+async function fetchWithRetry(url: string, options: RequestInit, retries: number = SEARCH_CONFIG.RETRY_ATTEMPTS): Promise<Response> {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), SEARCH_CONFIG.TIMEOUT);
+      
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        return response;
+      }
+      
+      // 如果是最后一次尝试，抛出错误
+      if (i === retries) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+    } catch (error) {
+      // 如果是最后一次尝试，抛出错误
+      if (i === retries) {
+        throw error;
+      }
+      
+      // 等待一段时间后重试
+      await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+    }
+  }
+  
+  throw new Error('所有重试都失败了');
+}
+
 export async function searchFromApi(
   apiSite: ApiSite,
-  query: string
+  query: string,
+  includeAdult: boolean = false
 ): Promise<SearchResult[]> {
   try {
     const apiBaseUrl = apiSite.api;
-    const apiUrl =
-      apiBaseUrl + API_CONFIG.search.path + encodeURIComponent(query);
+    const apiUrl = apiBaseUrl + API_CONFIG.search.path + encodeURIComponent(query);
     const apiName = apiSite.name;
 
-    // 添加超时处理
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    // 优化：根据查询长度决定搜索页数，长查询通常结果更精确
+    const config = await getConfig();
+    const configMaxPages = config.SiteConfig.SearchDownstreamMaxPage;
+    const maxPages = query.length > 10 ? Math.min(2, configMaxPages) : Math.min(3, configMaxPages);
 
-    const response = await fetch(apiUrl, {
+    // 第一页搜索 - 使用优化的fetch函数
+    const response = await fetchWithRetry(apiUrl, {
       headers: API_CONFIG.search.headers,
-      signal: controller.signal,
     });
-
-    clearTimeout(timeoutId);
 
     if (!response.ok) {
       return [];
     }
 
     const data = await response.json();
-    if (
-      !data ||
-      !data.list ||
-      !Array.isArray(data.list) ||
-      data.list.length === 0
-    ) {
+    if (!data || !data.list || !Array.isArray(data.list) || data.list.length === 0) {
       return [];
     }
+
     // 处理第一页结果
-    const results = data.list.map((item: ApiSearchItem) => {
-      let episodes: string[] = [];
+    const results = data.list
+      .filter((item: ApiSearchItem) => {
+        // 成人内容过滤
+        if (!includeAdult && isAdultContent(item)) {
+          return false;
+        }
+        return true;
+      })
+      .map((item: ApiSearchItem) => {
+        let episodes: string[] = [];
 
-      // 使用正则表达式从 vod_play_url 提取 m3u8 链接
-      if (item.vod_play_url) {
-        const m3u8Regex = /\$(https?:\/\/[^"'\s]+?\.m3u8)/g;
-        // 先用 $$$ 分割
-        const vod_play_url_array = item.vod_play_url.split('$$$');
-        // 对每个分片做匹配，取匹配到最多的作为结果
-        vod_play_url_array.forEach((url: string) => {
-          const matches = url.match(m3u8Regex) || [];
-          if (matches.length > episodes.length) {
-            episodes = matches;
-          }
+        // 使用正则表达式从 vod_play_url 提取 m3u8 链接
+        if (item.vod_play_url) {
+          const m3u8Regex = /\$(https?:\/\/[^"'\s]+?\.m3u8)/g;
+          // 先用 $$$ 分割
+          const vod_play_url_array = item.vod_play_url.split('$$$');
+          // 对每个分片做匹配，取匹配到最多的作为结果
+          vod_play_url_array.forEach((url: string) => {
+            const matches = url.match(m3u8Regex) || [];
+            if (matches.length > episodes.length) {
+              episodes = matches;
+            }
+          });
+        }
+
+        episodes = Array.from(new Set(episodes)).map((link: string) => {
+          link = link.substring(1); // 去掉开头的 $
+          const parenIndex = link.indexOf('(');
+          return parenIndex > 0 ? link.substring(0, parenIndex) : link;
         });
-      }
 
-      episodes = Array.from(new Set(episodes)).map((link: string) => {
-        link = link.substring(1); // 去掉开头的 $
-        const parenIndex = link.indexOf('(');
-        return parenIndex > 0 ? link.substring(0, parenIndex) : link;
+        return {
+          id: item.vod_id.toString(),
+          title: item.vod_name.trim().replace(/\s+/g, ' '),
+          poster: item.vod_pic,
+          episodes,
+          source: apiSite.key,
+          source_name: apiName,
+          class: item.vod_class,
+          year: item.vod_year ? item.vod_year.match(/\d{4}/)?.[0] || '' : 'unknown',
+          desc: cleanHtmlTags(item.vod_content || ''),
+          type_name: item.type_name,
+          douban_id: item.vod_douban_id,
+        };
       });
 
-      return {
-        id: item.vod_id.toString(),
-        title: item.vod_name.trim().replace(/\s+/g, ' '),
-        poster: item.vod_pic,
-        episodes,
-        source: apiSite.key,
-        source_name: apiName,
-        class: item.vod_class,
-        year: item.vod_year
-          ? item.vod_year.match(/\d{4}/)?.[0] || ''
-          : 'unknown',
-        desc: cleanHtmlTags(item.vod_content || ''),
-        type_name: item.type_name,
-        douban_id: item.vod_douban_id,
-      };
-    });
-
-    const config = await getConfig();
-    const MAX_SEARCH_PAGES: number = config.SiteConfig.SearchDownstreamMaxPage;
+    // 如果第一页没有结果或只需要一页，直接返回
+    if (results.length === 0 || maxPages === 1) {
+      return results;
+    }
 
     // 获取总页数
     const pageCount = data.pagecount || 1;
     // 确定需要获取的额外页数
-    const pagesToFetch = Math.min(pageCount - 1, MAX_SEARCH_PAGES - 1);
+    const pagesToFetch = Math.min(pageCount - 1, maxPages - 1);
 
     // 如果有额外页数，获取更多页的结果
     if (pagesToFetch > 0) {
       const additionalPagePromises = [];
 
       for (let page = 2; page <= pagesToFetch + 1; page++) {
-        const pageUrl =
-          apiBaseUrl +
-          API_CONFIG.search.pagePath
-            .replace('{query}', encodeURIComponent(query))
-            .replace('{page}', page.toString());
+        const pageUrl = apiBaseUrl + API_CONFIG.search.pagePath
+          .replace('{query}', encodeURIComponent(query))
+          .replace('{page}', page.toString());
 
-        const pagePromise = (async () => {
-          try {
-            const pageController = new AbortController();
-            const pageTimeoutId = setTimeout(
-              () => pageController.abort(),
-              8000
-            );
-
-            const pageResponse = await fetch(pageUrl, {
-              headers: API_CONFIG.search.headers,
-              signal: pageController.signal,
-            });
-
-            clearTimeout(pageTimeoutId);
-
+        const pagePromise = fetchWithRetry(pageUrl, {
+          headers: API_CONFIG.search.headers,
+        })
+          .then(async (pageResponse) => {
             if (!pageResponse.ok) return [];
 
             const pageData = await pageResponse.json();
+            if (!pageData || !pageData.list || !Array.isArray(pageData.list)) return [];
 
-            if (!pageData || !pageData.list || !Array.isArray(pageData.list))
-              return [];
+            return pageData.list
+              .filter((item: ApiSearchItem) => {
+                // 成人内容过滤
+                if (!includeAdult && isAdultContent(item)) {
+                  return false;
+                }
+                return true;
+              })
+              .map((item: ApiSearchItem) => {
+                let episodes: string[] = [];
 
-            return pageData.list.map((item: ApiSearchItem) => {
-              let episodes: string[] = [];
+                // 使用正则表达式从 vod_play_url 提取 m3u8 链接
+                if (item.vod_play_url) {
+                  const m3u8Regex = /\$(https?:\/\/[^"'\s]+?\.m3u8)/g;
+                  episodes = item.vod_play_url.match(m3u8Regex) || [];
+                }
 
-              // 使用正则表达式从 vod_play_url 提取 m3u8 链接
-              if (item.vod_play_url) {
-                const m3u8Regex = /\$(https?:\/\/[^"'\s]+?\.m3u8)/g;
-                episodes = item.vod_play_url.match(m3u8Regex) || [];
-              }
+                episodes = Array.from(new Set(episodes)).map((link: string) => {
+                  link = link.substring(1); // 去掉开头的 $
+                  const parenIndex = link.indexOf('(');
+                  return parenIndex > 0 ? link.substring(0, parenIndex) : link;
+                });
 
-              episodes = Array.from(new Set(episodes)).map((link: string) => {
-                link = link.substring(1); // 去掉开头的 $
-                const parenIndex = link.indexOf('(');
-                return parenIndex > 0 ? link.substring(0, parenIndex) : link;
+                return {
+                  id: item.vod_id.toString(),
+                  title: item.vod_name.trim().replace(/\s+/g, ' '),
+                  poster: item.vod_pic,
+                  episodes,
+                  source: apiSite.key,
+                  source_name: apiName,
+                  class: item.vod_class,
+                  year: item.vod_year ? item.vod_year.match(/\d{4}/)?.[0] || '' : 'unknown',
+                  desc: cleanHtmlTags(item.vod_content || ''),
+                  type_name: item.type_name,
+                  douban_id: item.vod_douban_id,
+                };
               });
-
-              return {
-                id: item.vod_id.toString(),
-                title: item.vod_name.trim().replace(/\s+/g, ' '),
-                poster: item.vod_pic,
-                episodes,
-                source: apiSite.key,
-                source_name: apiName,
-                class: item.vod_class,
-                year: item.vod_year
-                  ? item.vod_year.match(/\d{4}/)?.[0] || ''
-                  : 'unknown',
-                desc: cleanHtmlTags(item.vod_content || ''),
-                type_name: item.type_name,
-                douban_id: item.vod_douban_id,
-              };
-            });
-          } catch (error) {
-            return [];
-          }
-        })();
+          })
+          .catch((error) => {
+            console.error(`第${page}页搜索失败 ${apiName}:`, error);
+            return []; // 返回空数组而不是抛出错误
+          });
 
         additionalPagePromises.push(pagePromise);
       }
 
       // 等待所有额外页的结果
-      const additionalResults = await Promise.all(additionalPagePromises);
+      try {
+        const additionalResults = await Promise.all(additionalPagePromises);
 
-      // 合并所有页的结果
-      additionalResults.forEach((pageResults) => {
-        if (pageResults.length > 0) {
-          results.push(...pageResults);
-        }
-      });
+        // 合并所有页的结果
+        additionalResults.forEach((pageResults) => {
+          if (pageResults.length > 0) {
+            results.push(...pageResults);
+          }
+        });
+      } catch (error) {
+        console.error(`额外页面搜索失败 ${apiName}:`, error);
+        // 即使额外页面失败，也返回第一页的结果
+      }
     }
 
     return results;
   } catch (error) {
+    console.error(`搜索API失败 ${apiName}:`, error);
     return [];
   }
+}
+
+// 成人内容检测函数
+function isAdultContent(item: ApiSearchItem): boolean {
+  const adultKeywords = ['成人', '情色', '三级', '限制级', 'R级', '18+', '成人版', '伦理'];
+  const title = (item.vod_name || '').toLowerCase();
+  const content = (item.vod_content || '').toLowerCase();
+  const typeName = (item.type_name || '').toLowerCase();
+  
+  return adultKeywords.some(keyword => 
+    title.includes(keyword) || 
+    content.includes(keyword) || 
+    typeName.includes(keyword)
+  );
 }
 
 // 匹配 m3u8 链接的正则

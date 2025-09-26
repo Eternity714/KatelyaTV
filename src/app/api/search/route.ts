@@ -1,9 +1,7 @@
-import { NextResponse } from 'next/server';
-
-import { getAvailableApiSites,getCacheTime } from '@/lib/config';
-import { addCorsHeaders, handleOptionsRequest } from '@/lib/cors';
-import { getStorage } from '@/lib/db';
+import { NextRequest, NextResponse } from 'next/server';
+import { getFilteredApiSites } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
+import { SearchResult } from '@/lib/types';
 
 export const runtime = 'edge';
 
@@ -12,107 +10,169 @@ export async function OPTIONS() {
   return handleOptionsRequest();
 }
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const query = searchParams.get('q');
-  
-  // 从 Authorization header 或 query parameter 获取用户名
-  let userName: string | undefined = searchParams.get('user') || undefined;
-  if (!userName) {
-    const authHeader = request.headers.get('Authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      userName = authHeader.substring(7);
+// 搜索结果缓存 - 使用 Map 实现内存缓存
+const searchCache = new Map<string, { results: SearchResult[]; timestamp: number }>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5分钟缓存
+const MAX_CACHE_SIZE = 1000; // 最大缓存条目数
+
+// 清理过期缓存
+function cleanExpiredCache() {
+  const now = Date.now();
+  for (const [key, value] of searchCache.entries()) {
+    if (now - value.timestamp > CACHE_DURATION) {
+      searchCache.delete(key);
+    }
+  }
+}
+
+// 获取缓存键
+function getCacheKey(query: string, userName?: string, includeAdult?: boolean): string {
+  return `${query}:${userName || 'anonymous'}:${includeAdult || false}`;
+}
+
+// 限制并发请求数量
+async function searchWithConcurrencyLimit<T>(
+  tasks: (() => Promise<T>)[],
+  limit: number = 3
+): Promise<T[]> {
+  const results: T[] = [];
+  const executing: Promise<void>[] = [];
+
+  for (const task of tasks) {
+    const promise = task().then(result => {
+      results.push(result);
+    }).catch(error => {
+      console.error('搜索任务失败:', error);
+      // 返回空结果而不是抛出错误
+      results.push([] as unknown as T);
+    });
+
+    executing.push(promise);
+
+    if (executing.length >= limit) {
+      await Promise.race(executing);
+      // 移除已完成的 promise
+      const completedIndex = executing.findIndex(p => 
+        p === promise || results.length > executing.length - limit
+      );
+      if (completedIndex !== -1) {
+        executing.splice(completedIndex, 1);
+      }
     }
   }
 
-  if (!query) {
-    const cacheTime = await getCacheTime();
-    const response = NextResponse.json(
-      { 
-        regular_results: [],
-        adult_results: []
-      },
-      {
-        headers: {
-          'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
-          'CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-          'Vercel-CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-        },
-      }
-    );
-    return addCorsHeaders(response);
-  }
+  await Promise.all(executing);
+  return results;
+}
 
+export async function GET(request: NextRequest) {
   try {
-    // 检查是否明确要求包含成人内容（用于关闭过滤时的明确请求）
-    const includeAdult = searchParams.get('include_adult') === 'true';
+    const { searchParams } = new URL(request.url);
+    const query = searchParams.get('q');
     
-    // 获取用户的成人内容过滤设置
-    let shouldFilterAdult = true; // 默认过滤
-    if (userName) {
-      try {
-        const storage = getStorage();
-        const userSettings = await storage.getUserSettings(userName);
-        // 如果用户设置存在且明确设为false，则不过滤；否则默认过滤
-        shouldFilterAdult = userSettings?.filter_adult_content !== false;
-      } catch (error) {
-        // 出错时默认过滤成人内容
-        shouldFilterAdult = true;
-      }
+    if (!query) {
+      return NextResponse.json({ 
+        regular_results: [], 
+        adult_results: [],
+        cached: false,
+        search_time: 0
+      });
     }
 
-    // 根据用户设置和明确请求决定最终的过滤策略
-    const finalShouldFilter = shouldFilterAdult || !includeAdult;
+    // 获取用户信息
+    const authHeader = request.headers.get('Authorization');
+    const userName = authHeader?.replace('Bearer ', '') || searchParams.get('userName');
+    const includeAdult = searchParams.get('include_adult') === 'true';
+
+    // 检查缓存
+    const cacheKey = getCacheKey(query, userName, includeAdult);
+    const cached = searchCache.get(cacheKey);
     
-    // 使用动态过滤方法，但不依赖缓存，实时获取设置
-    const availableSites = finalShouldFilter 
-      ? await getAvailableApiSites(true) // 过滤成人内容
-      : await getAvailableApiSites(false); // 不过滤成人内容
-    
-    if (!availableSites || availableSites.length === 0) {
-      const cacheTime = await getCacheTime();
-      const response = NextResponse.json({ 
-        regular_results: [], 
-        adult_results: [] 
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      return NextResponse.json({
+        regular_results: cached.results,
+        adult_results: [],
+        cached: true,
+        search_time: 0
       }, {
         headers: {
-          'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
-          'CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-          'Vercel-CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
+          'Cache-Control': 'public, max-age=300', // 5分钟浏览器缓存
         },
       });
-      return addCorsHeaders(response);
     }
 
-    // 搜索所有可用的资源站（已根据用户设置动态过滤）
-    const searchPromises = availableSites.map((site) => searchFromApi(site, query));
-    const searchResults = (await Promise.all(searchPromises)).flat();
+    const startTime = Date.now();
 
-    // 所有结果都作为常规结果返回，因为成人内容源已经在源头被过滤掉了
-    const cacheTime = await getCacheTime();
-    const response = NextResponse.json(
-      { 
-        regular_results: searchResults,
-        adult_results: [] // 始终为空，因为成人内容在源头就被过滤了
-      },
-      {
-        headers: {
-          'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
-          'CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-          'Vercel-CDN-Cache-Control': `public, s-maxage=${cacheTime}`,
-        },
-      }
-    );
-    return addCorsHeaders(response);
-  } catch (error) {
-    const response = NextResponse.json(
-      { 
-        regular_results: [],
+    // 获取可用的API站点
+    const apiSites = await getFilteredApiSites(userName);
+    
+    if (apiSites.length === 0) {
+      return NextResponse.json({ 
+        regular_results: [], 
         adult_results: [],
-        error: '搜索失败' 
-      }, 
-      { status: 500 }
+        cached: false,
+        search_time: Date.now() - startTime
+      });
+    }
+
+    // 创建搜索任务
+    const searchTasks = apiSites.map(site => 
+      () => searchFromApi(site, query, includeAdult)
     );
-    return addCorsHeaders(response);
+
+    // 使用并发限制执行搜索
+    const searchResults = await searchWithConcurrencyLimit(searchTasks, 3);
+
+    // 合并所有搜索结果
+    const allResults: SearchResult[] = [];
+    for (const results of searchResults) {
+      if (Array.isArray(results)) {
+        allResults.push(...results);
+      }
+    }
+
+    const searchTime = Date.now() - startTime;
+
+    // 缓存结果
+    if (allResults.length > 0) {
+      // 清理过期缓存
+      if (searchCache.size > MAX_CACHE_SIZE) {
+        cleanExpiredCache();
+      }
+      
+      // 如果缓存仍然太大，删除最旧的条目
+      if (searchCache.size > MAX_CACHE_SIZE) {
+        const oldestKey = searchCache.keys().next().value;
+        if (oldestKey) {
+          searchCache.delete(oldestKey);
+        }
+      }
+
+      searchCache.set(cacheKey, {
+        results: allResults,
+        timestamp: Date.now()
+      });
+    }
+
+    return NextResponse.json({
+      regular_results: allResults,
+      adult_results: [], // 成人内容已在源头过滤
+      cached: false,
+      search_time: searchTime
+    }, {
+      headers: {
+        'Cache-Control': 'public, max-age=300', // 5分钟浏览器缓存
+      },
+    });
+
+  } catch (error) {
+    console.error('搜索失败:', error);
+    return NextResponse.json({
+      regular_results: [],
+      adult_results: [],
+      cached: false,
+      search_time: 0,
+      error: '搜索服务暂时不可用'
+    }, { status: 500 });
   }
 }
