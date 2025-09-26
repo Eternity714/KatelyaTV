@@ -1148,7 +1148,7 @@ function PlayPageClient() {
           // 微信浏览器全屏支持
           'x5-video-player-type': 'h5',
           'x5-video-player-fullscreen': 'true',
-          'x5-video-orientation': 'portraint',
+          'x5-video-orientation': 'portrait',
         } as Record<string, any>,
         // HLS 支持配置
         customType: {
@@ -1394,7 +1394,7 @@ function PlayPageClient() {
       });
 
       // 监听全屏状态变化
-      artPlayerRef.current.on('fullscreen', (isFullscreen) => {
+      artPlayerRef.current.on('fullscreen', (isFullscreen: boolean) => {
         // 使用工具函数检测移动端
         const isMobile = isMobileDevice();
         

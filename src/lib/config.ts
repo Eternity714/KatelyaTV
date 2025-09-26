@@ -84,7 +84,6 @@ async function initConfig() {
       }
 
       // 从文件中获取源信息，用于补全源
-      const apiSiteEntries = Object.entries(fileConfig.api_site);
 
       if (adminConfig) {
         // SourceConfig 现在存储在独立的 source_configs 表中，不再在 AdminConfig 中处理
@@ -659,7 +658,7 @@ export async function getAdultApiSites(): Promise<ApiSite[]> {
       fileConfig = runtimeConfig as unknown as ConfigFileStruct;
     }
     const adultSites = Object.entries(fileConfig.api_site)
-      .filter(([key, site]) => (site as any).is_adult === true)
+      .filter(([_key, site]) => (site as any).is_adult === true)
       .map(([key, site]) => ({
         key,
         name: site.name,
