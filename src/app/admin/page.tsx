@@ -1070,7 +1070,7 @@ const VideoSourceConfig = ({
         });
 
         // 只保留删除失败的选择项
-        const failedKeys = new Set(failedResults.map((r: any) => r.key));
+        const failedKeys = new Set(failedResults.map((r: any) => r.key as string));
         setSelectedSources(failedKeys);
       }
     } catch (error) {
