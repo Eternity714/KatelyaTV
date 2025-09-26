@@ -1059,7 +1059,7 @@ const VideoSourceConfig = ({
                 <details class="mt-3">
                   <summary class="cursor-pointer text-gray-600">查看错误详情</summary>
                   <div class="mt-2 text-sm text-gray-500 max-h-32 overflow-y-auto">
-                    ${errors.map(err => `<div class="py-1">${err}</div>`).join('')}
+                    ${errors.map((err: string) => `<div class="py-1">${err}</div>`).join('')}
                   </div>
                 </details>
               ` : ''}
