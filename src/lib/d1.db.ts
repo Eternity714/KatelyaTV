@@ -1,7 +1,7 @@
 /* eslint-disable no-console, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */
 
 import { AdminConfig } from './admin.types';
-import { EpisodeSkipConfig, Favorite, IStorage, PlayRecord, UserSettings } from './types';
+import { EpisodeSkipConfig, Favorite, IStorage, PlayRecord, SourceConfig, UserSettings } from './types';
 
 // 搜索历史最大条数
 const SEARCH_HISTORY_LIMIT = 20;
@@ -688,20 +688,239 @@ export class D1Storage implements IStorage {
     userName: string,
     settings: Partial<UserSettings>
   ): Promise<void> {
-    const current = await this.getUserSettings(userName);
-    const defaultSettings: UserSettings = {
-      filter_adult_content: true,
-      theme: 'auto',
-      language: 'zh-CN',
-      auto_play: false,
-      video_quality: 'auto'
-    };
-    const updated: UserSettings = { 
-      ...defaultSettings, 
-      ...current, 
-      ...settings,
-      filter_adult_content: settings.filter_adult_content ?? current?.filter_adult_content ?? true
-    };
-    await this.setUserSettings(userName, updated);
+    try {
+      const db = await this.getDatabase();
+      const currentSettings = await this.getUserSettings(userName);
+      const newSettings = { ...currentSettings, ...settings };
+
+      await db
+        .prepare(
+          'INSERT OR REPLACE INTO user_settings (username, settings) VALUES (?, ?)'
+        )
+        .bind(userName, JSON.stringify(newSettings))
+        .run();
+    } catch (err) {
+      console.error('Failed to update user settings:', err);
+      throw err;
+    }
+  }
+
+  // 视频源配置相关
+  async getAllSourceConfigs(): Promise<SourceConfig[]> {
+    try {
+      const db = await this.getDatabase();
+      const result = await db
+        .prepare('SELECT * FROM source_configs ORDER BY sort_order ASC, id ASC')
+        .all<any>();
+
+      return result.results.map(row => ({
+        id: row.id,
+        source_key: row.source_key,
+        name: row.name,
+        api: row.api,
+        detail: row.detail || undefined,
+        from_type: row.from_type as 'config' | 'custom',
+        disabled: Boolean(row.disabled),
+        is_adult: Boolean(row.is_adult),
+        sort_order: row.sort_order,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+      }));
+    } catch (err) {
+      console.error('Failed to get all source configs:', err);
+      throw err;
+    }
+  }
+
+  async getSourceConfig(sourceKey: string): Promise<SourceConfig | null> {
+    try {
+      const db = await this.getDatabase();
+      const result = await db
+        .prepare('SELECT * FROM source_configs WHERE source_key = ?')
+        .bind(sourceKey)
+        .first<any>();
+
+      if (!result) return null;
+
+      return {
+        id: result.id,
+        source_key: result.source_key,
+        name: result.name,
+        api: result.api,
+        detail: result.detail || undefined,
+        from_type: result.from_type as 'config' | 'custom',
+        disabled: Boolean(result.disabled),
+        is_adult: Boolean(result.is_adult),
+        sort_order: result.sort_order,
+        created_at: result.created_at,
+        updated_at: result.updated_at,
+      };
+    } catch (err) {
+      console.error('Failed to get source config:', err);
+      throw err;
+    }
+  }
+
+  async addSourceConfig(config: Omit<SourceConfig, 'id' | 'created_at' | 'updated_at'>): Promise<SourceConfig> {
+    try {
+      const db = await this.getDatabase();
+      const result = await db
+        .prepare(`
+          INSERT INTO source_configs 
+          (source_key, name, api, detail, from_type, disabled, is_adult, sort_order)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+        .bind(
+          config.source_key,
+          config.name,
+          config.api,
+          config.detail || null,
+          config.from_type,
+          config.disabled ? 1 : 0,
+          config.is_adult ? 1 : 0,
+          config.sort_order
+        )
+        .run();
+
+      if (!result.success) {
+        throw new Error('Failed to insert source config');
+      }
+
+      // 返回新创建的记录
+      const newConfig = await this.getSourceConfig(config.source_key);
+      if (!newConfig) {
+        throw new Error('Failed to retrieve newly created source config');
+      }
+
+      return newConfig;
+    } catch (err) {
+      console.error('Failed to add source config:', err);
+      throw err;
+    }
+  }
+
+  async updateSourceConfig(
+    sourceKey: string,
+    config: Partial<Omit<SourceConfig, 'id' | 'source_key' | 'created_at' | 'updated_at'>>
+  ): Promise<SourceConfig | null> {
+    try {
+      const db = await this.getDatabase();
+      
+      // 构建动态更新语句
+      const updateFields: string[] = [];
+      const values: any[] = [];
+
+      if (config.name !== undefined) {
+        updateFields.push('name = ?');
+        values.push(config.name);
+      }
+      if (config.api !== undefined) {
+        updateFields.push('api = ?');
+        values.push(config.api);
+      }
+      if (config.detail !== undefined) {
+        updateFields.push('detail = ?');
+        values.push(config.detail || null);
+      }
+      if (config.from_type !== undefined) {
+        updateFields.push('from_type = ?');
+        values.push(config.from_type);
+      }
+      if (config.disabled !== undefined) {
+        updateFields.push('disabled = ?');
+        values.push(config.disabled ? 1 : 0);
+      }
+      if (config.is_adult !== undefined) {
+        updateFields.push('is_adult = ?');
+        values.push(config.is_adult ? 1 : 0);
+      }
+      if (config.sort_order !== undefined) {
+        updateFields.push('sort_order = ?');
+        values.push(config.sort_order);
+      }
+
+      if (updateFields.length === 0) {
+        // 没有字段需要更新，返回现有记录
+        return this.getSourceConfig(sourceKey);
+      }
+
+      // 添加 updated_at 字段
+      updateFields.push('updated_at = CURRENT_TIMESTAMP');
+      values.push(sourceKey);
+
+      const sql = `UPDATE source_configs SET ${updateFields.join(', ')} WHERE source_key = ?`;
+      const result = await db.prepare(sql).bind(...values).run();
+
+      if (!result.success || result.meta.changes === 0) {
+        return null;
+      }
+
+      return this.getSourceConfig(sourceKey);
+    } catch (err) {
+      console.error('Failed to update source config:', err);
+      throw err;
+    }
+  }
+
+  async deleteSourceConfig(sourceKey: string): Promise<boolean> {
+    try {
+      const db = await this.getDatabase();
+      const result = await db
+        .prepare('DELETE FROM source_configs WHERE source_key = ?')
+        .bind(sourceKey)
+        .run();
+
+      return result.success && result.meta.changes > 0;
+    } catch (err) {
+      console.error('Failed to delete source config:', err);
+      throw err;
+    }
+  }
+
+  async enableSourceConfig(sourceKey: string): Promise<boolean> {
+    try {
+      const db = await this.getDatabase();
+      const result = await db
+        .prepare('UPDATE source_configs SET disabled = 0, updated_at = CURRENT_TIMESTAMP WHERE source_key = ?')
+        .bind(sourceKey)
+        .run();
+
+      return result.success && result.meta.changes > 0;
+    } catch (err) {
+      console.error('Failed to enable source config:', err);
+      throw err;
+    }
+  }
+
+  async disableSourceConfig(sourceKey: string): Promise<boolean> {
+    try {
+      const db = await this.getDatabase();
+      const result = await db
+        .prepare('UPDATE source_configs SET disabled = 1, updated_at = CURRENT_TIMESTAMP WHERE source_key = ?')
+        .bind(sourceKey)
+        .run();
+
+      return result.success && result.meta.changes > 0;
+    } catch (err) {
+      console.error('Failed to disable source config:', err);
+      throw err;
+    }
+  }
+
+  async reorderSourceConfigs(sourceKeys: string[]): Promise<void> {
+    try {
+      const db = await this.getDatabase();
+      
+      // 使用事务批量更新排序
+      const statements = sourceKeys.map((sourceKey, index) =>
+        db.prepare('UPDATE source_configs SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE source_key = ?')
+          .bind(index, sourceKey)
+      );
+
+      await db.batch(statements);
+    } catch (err) {
+      console.error('Failed to reorder source configs:', err);
+      throw err;
+    }
   }
 }

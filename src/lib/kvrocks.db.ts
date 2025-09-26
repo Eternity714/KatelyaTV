@@ -3,7 +3,7 @@
 import { createClient, RedisClientType } from 'redis';
 
 import { AdminConfig } from './admin.types';
-import { EpisodeSkipConfig, Favorite, IStorage, PlayRecord, UserSettings } from './types';
+import { EpisodeSkipConfig, Favorite, IStorage, PlayRecord, SourceConfig, UserSettings } from './types';
 
 // 搜索历史最大条数
 const SEARCH_HISTORY_LIMIT = 20;
@@ -401,21 +401,62 @@ export class KvrocksStorage implements IStorage {
     userName: string,
     settings: Partial<UserSettings>
   ): Promise<void> {
-    const current = await this.getUserSettings(userName);
-    const defaultSettings: UserSettings = {
-      filter_adult_content: true,
-      theme: 'auto',
-      language: 'zh-CN',
-      auto_play: false,
-      video_quality: 'auto'
-    };
-    const updated: UserSettings = { 
-      ...defaultSettings, 
-      ...current, 
-      ...settings,
-      filter_adult_content: settings.filter_adult_content ?? current?.filter_adult_content ?? true
-    };
-    await this.setUserSettings(userName, updated);
+    return withRetry(async () => {
+      const currentSettings = await this.getUserSettings(userName);
+      if (currentSettings) {
+        const updatedSettings = { ...currentSettings, ...settings };
+        await this.client.set(
+          this.userSettingsKey(userName),
+          JSON.stringify(updatedSettings)
+        );
+      } else {
+        // 如果用户设置不存在，创建新的设置
+        await this.client.set(
+          this.userSettingsKey(userName),
+          JSON.stringify(settings)
+        );
+      }
+    });
+  }
+
+  // ---------- 视频源配置相关（Kvrocks 不支持，返回空实现） ----------
+  async getAllSourceConfigs(): Promise<SourceConfig[]> {
+    console.warn('SourceConfig operations are not supported in Kvrocks mode');
+    return [];
+  }
+
+  async getSourceConfig(sourceKey: string): Promise<SourceConfig | null> {
+    console.warn('SourceConfig operations are not supported in Kvrocks mode');
+    return null;
+  }
+
+  async addSourceConfig(config: Omit<SourceConfig, 'id' | 'created_at' | 'updated_at'>): Promise<SourceConfig> {
+    console.warn('SourceConfig operations are not supported in Kvrocks mode');
+    throw new Error('SourceConfig operations are not supported in Kvrocks mode');
+  }
+
+  async updateSourceConfig(sourceKey: string, config: Partial<Omit<SourceConfig, 'id' | 'source_key' | 'created_at' | 'updated_at'>>): Promise<SourceConfig | null> {
+    console.warn('SourceConfig operations are not supported in Kvrocks mode');
+    return null;
+  }
+
+  async deleteSourceConfig(sourceKey: string): Promise<boolean> {
+    console.warn('SourceConfig operations are not supported in Kvrocks mode');
+    return false;
+  }
+
+  async enableSourceConfig(sourceKey: string): Promise<boolean> {
+    console.warn('SourceConfig operations are not supported in Kvrocks mode');
+    return false;
+  }
+
+  async disableSourceConfig(sourceKey: string): Promise<boolean> {
+    console.warn('SourceConfig operations are not supported in Kvrocks mode');
+    return false;
+  }
+
+  async reorderSourceConfigs(sourceKeys: string[]): Promise<void> {
+    console.warn('SourceConfig operations are not supported in Kvrocks mode');
   }
 }
 

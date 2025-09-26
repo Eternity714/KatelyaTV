@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getConfig } from '@/lib/config';
+import { getConfig, getAvailableApiSites } from '@/lib/config';
 
 // 强制使用 Edge Runtime 以支持 Cloudflare Pages
 export const runtime = 'edge';
@@ -55,8 +55,8 @@ export async function GET(request: NextRequest) {
     // 读取当前配置
     const config = await getConfig();
     
-    // 从配置中获取源站列表
-    const sourceConfigs = config.SourceConfig || [];
+    // 从新的源配置系统获取源站列表
+    const sourceConfigs = await getAvailableApiSites();
     
     if (sourceConfigs.length === 0) {
       return NextResponse.json({ error: '没有配置任何视频源' }, { status: 500 });

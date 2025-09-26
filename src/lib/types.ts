@@ -42,6 +42,21 @@ export interface Favorite {
   search_title: string; // 搜索时使用的标题
 }
 
+// 视频源配置数据结构（独立存储）
+export interface SourceConfig {
+  id?: number; // 数据库主键（可选，新增时不需要）
+  source_key: string; // 源的唯一标识符
+  name: string; // 源的显示名称
+  api: string; // 视频 API 的搜索接口地址
+  detail?: string; // 视频详情接口地址（可选）
+  from_type: 'config' | 'custom'; // 来源类型
+  disabled: boolean; // 是否禁用
+  is_adult: boolean; // 是否为成人内容源
+  sort_order: number; // 排序顺序
+  created_at?: string; // 创建时间（可选）
+  updated_at?: string; // 更新时间（可选）
+}
+
 // 用户数据库记录接口
 export interface UserRecord {
   id: number;
@@ -107,6 +122,16 @@ export interface IStorage {
   // 管理员配置相关
   getAdminConfig(): Promise<AdminConfig | null>;
   setAdminConfig(config: AdminConfig): Promise<void>;
+
+  // 视频源配置相关
+  getAllSourceConfigs(): Promise<SourceConfig[]>;
+  getSourceConfig(sourceKey: string): Promise<SourceConfig | null>;
+  addSourceConfig(config: Omit<SourceConfig, 'id' | 'created_at' | 'updated_at'>): Promise<SourceConfig>;
+  updateSourceConfig(sourceKey: string, config: Partial<Omit<SourceConfig, 'id' | 'source_key' | 'created_at' | 'updated_at'>>): Promise<SourceConfig | null>;
+  deleteSourceConfig(sourceKey: string): Promise<boolean>;
+  enableSourceConfig(sourceKey: string): Promise<boolean>;
+  disableSourceConfig(sourceKey: string): Promise<boolean>;
+  reorderSourceConfigs(sourceKeys: string[]): Promise<void>;
 }
 
 // 搜索结果数据结构

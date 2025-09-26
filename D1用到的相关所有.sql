@@ -127,6 +127,21 @@ CREATE TABLE IF NOT EXISTS admin_configs (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 视频源配置表（独立存储）
+CREATE TABLE IF NOT EXISTS source_configs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_key TEXT UNIQUE NOT NULL, -- 源的唯一标识符
+  name TEXT NOT NULL, -- 源的显示名称
+  api TEXT NOT NULL, -- 视频 API 的搜索接口地址
+  detail TEXT, -- 视频详情接口地址（可选）
+  from_type TEXT NOT NULL DEFAULT 'custom', -- 来源类型：'config' | 'custom'
+  disabled BOOLEAN DEFAULT 0, -- 是否禁用
+  is_adult BOOLEAN DEFAULT 0, -- 是否为成人内容源
+  sort_order INTEGER DEFAULT 0, -- 排序顺序
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- =============================================
 -- 第三部分：索引创建
 -- =============================================
@@ -158,6 +173,13 @@ CREATE INDEX IF NOT EXISTS idx_search_history_user_id_keyword ON search_history(
 CREATE INDEX IF NOT EXISTS idx_skip_configs_user_id ON skip_configs(user_id);
 CREATE INDEX IF NOT EXISTS idx_skip_configs_config_key ON skip_configs(config_key);
 CREATE INDEX IF NOT EXISTS idx_skip_configs_updated_time ON skip_configs(updated_time DESC);
+
+-- 视频源配置索引
+CREATE INDEX IF NOT EXISTS idx_source_configs_source_key ON source_configs(source_key);
+CREATE INDEX IF NOT EXISTS idx_source_configs_disabled ON source_configs(disabled);
+CREATE INDEX IF NOT EXISTS idx_source_configs_from_type ON source_configs(from_type);
+CREATE INDEX IF NOT EXISTS idx_source_configs_sort_order ON source_configs(sort_order);
+CREATE INDEX IF NOT EXISTS idx_source_configs_is_adult ON source_configs(is_adult);
 
 -- =============================================
 -- 第四部分：视图创建

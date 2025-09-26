@@ -824,12 +824,36 @@ const VideoSourceConfig = ({
     })
   );
 
-  // 初始化
+  // 初始化 - 从 API 获取源配置
   useEffect(() => {
-    if (config?.SourceConfig) {
-      setSources(config.SourceConfig);
+    const loadSources = async () => {
+      try {
+        const resp = await fetch('/api/admin/source');
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.sources) {
+            // 转换数据格式以兼容现有组件
+            const formattedSources = data.sources.map((source: any) => ({
+              key: source.source_key || source.key,
+              name: source.name,
+              api: source.api,
+              detail: source.detail,
+              disabled: source.disabled,
+              from: source.from_type || source.from,
+              is_adult: source.is_adult
+            }));
+            setSources(formattedSources);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load sources:', error);
+      }
       // 进入时重置 orderChanged
       setOrderChanged(false);
+    };
+
+    if (config) {
+      loadSources();
     }
   }, [config]);
 

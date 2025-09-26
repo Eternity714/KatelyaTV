@@ -2,6 +2,7 @@
 
 import { AdminConfig } from './admin.types';
 import { getStorage } from './db';
+import { SourceConfig } from './types';
 import runtimeConfig from './runtime';
 
 export interface ApiSite {
@@ -87,37 +88,7 @@ async function initConfig() {
       const apiSiteEntries = Object.entries(fileConfig.api_site);
 
       if (adminConfig) {
-        // 补全 SourceConfig
-        const existed = new Set(
-          (adminConfig.SourceConfig || []).map((s) => s.key)
-        );
-        apiSiteEntries.forEach(([key, site]) => {
-          if (!existed.has(key)) {
-            adminConfig!.SourceConfig.push({
-              key,
-              name: site.name,
-              api: site.api,
-              detail: site.detail,
-              from: 'config',
-              disabled: false,
-              is_adult: (site as any).is_adult || false, // 确保 is_adult 字段被正确处理
-            });
-          }
-        });
-
-        // 检查现有源是否在 fileConfig.api_site 中，如果不在则标记为 custom
-        const apiSiteKeys = new Set(apiSiteEntries.map(([key]) => key));
-        adminConfig.SourceConfig.forEach((source) => {
-          if (!apiSiteKeys.has(source.key)) {
-            source.from = 'custom';
-          } else {
-            // 更新现有源的 is_adult 字段
-            const siteConfig = fileConfig.api_site[source.key];
-            if (siteConfig) {
-              source.is_adult = (siteConfig as any).is_adult || false;
-            }
-          }
-        });
+        // SourceConfig 现在存储在独立的 source_configs 表中，不再在 AdminConfig 中处理
 
         const existedUsers = new Set(
           (adminConfig.UserConfig.Users || []).map((u) => u.username)
@@ -171,15 +142,7 @@ async function initConfig() {
             AllowRegister: process.env.NEXT_PUBLIC_ENABLE_REGISTER === 'true',
             Users: allUsers as any,
           },
-          SourceConfig: apiSiteEntries.map(([key, site]) => ({
-            key,
-            name: site.name,
-            api: site.api,
-            detail: site.detail,
-            from: 'config',
-            disabled: false,
-            is_adult: (site as any).is_adult || false, // 确保 is_adult 字段被正确处理
-          })),
+          // SourceConfig 现在存储在独立的 source_configs 表中
         };
       }
 
@@ -211,15 +174,75 @@ async function initConfig() {
         AllowRegister: process.env.NEXT_PUBLIC_ENABLE_REGISTER === 'true',
         Users: [],
       },
-      SourceConfig: Object.entries(fileConfig.api_site).map(([key, site]) => ({
-        key,
-        name: site.name,
-        api: site.api,
-        detail: site.detail,
-        from: 'config',
-        disabled: false,
-      })),
+      // SourceConfig 现在存储在独立的 source_configs 表中（本地存储模式下从文件读取）
     } as AdminConfig;
+  }
+}
+
+// 初始化 source_configs 表，将文件配置中的源同步到数据库
+async function initSourceConfigs() {
+  const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
+  if (storageType === 'localstorage') {
+    // 本地存储模式不需要初始化数据库表
+    return;
+  }
+
+  const storage = getStorage();
+  if (!storage || typeof storage.getAllSourceConfigs !== 'function') {
+    console.warn('Storage does not support SourceConfig operations');
+    return;
+  }
+
+  try {
+    // 获取当前数据库中的所有源配置
+    const existingConfigs = await storage.getAllSourceConfigs();
+    const existingKeys = new Set(existingConfigs.map(config => config.source_key));
+
+    // 获取文件配置中的源
+    if (!fileConfig) {
+      fileConfig = runtimeConfig as unknown as ConfigFileStruct;
+    }
+    const apiSiteEntries = Object.entries(fileConfig.api_site);
+
+    // 添加文件中存在但数据库中不存在的源
+    for (const [key, site] of apiSiteEntries) {
+      if (!existingKeys.has(key)) {
+        await storage.addSourceConfig({
+          source_key: key,
+          name: site.name,
+          api: site.api,
+          detail: site.detail || '',
+          from_type: 'config',
+          disabled: false,
+          is_adult: (site as any).is_adult || false,
+          sort_order: 0
+        });
+        console.log(`Added source config: ${key}`);
+      }
+    }
+
+    // 更新现有源的 from_type 字段
+    const apiSiteKeys = new Set(apiSiteEntries.map(([key]) => key));
+    for (const config of existingConfigs) {
+      if (!apiSiteKeys.has(config.source_key) && config.from_type !== 'custom') {
+        // 文件中不存在的源标记为 custom
+        await storage.updateSourceConfig(config.source_key, { from_type: 'custom' });
+      } else if (apiSiteKeys.has(config.source_key) && config.from_type !== 'config') {
+        // 文件中存在的源标记为 config
+        await storage.updateSourceConfig(config.source_key, { from_type: 'config' });
+        
+        // 同时更新 is_adult 字段
+        const siteConfig = fileConfig.api_site[config.source_key];
+        if (siteConfig) {
+          const isAdult = (siteConfig as any).is_adult || false;
+          if (config.is_adult !== isAdult) {
+            await storage.updateSourceConfig(config.source_key, { is_adult: isAdult });
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to initialize source configs:', error);
   }
 }
 
@@ -227,6 +250,8 @@ export async function getConfig(): Promise<AdminConfig> {
   const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
   if (process.env.DOCKER_ENV === 'true' || storageType === 'localstorage') {
     await initConfig();
+    // 初始化 source_configs 表
+    await initSourceConfigs();
     return cachedConfig;
   }
   // 非 docker 环境且 DB 存储，直接读 db 配置
@@ -248,37 +273,7 @@ export async function getConfig(): Promise<AdminConfig> {
     adminConfig.SiteConfig.DoubanProxy =
       process.env.NEXT_PUBLIC_DOUBAN_PROXY || '';
 
-    // 合并文件中的源信息
-    fileConfig = runtimeConfig as unknown as ConfigFileStruct;
-    const apiSiteEntries = Object.entries(fileConfig.api_site);
-    const existed = new Set((adminConfig.SourceConfig || []).map((s) => s.key));
-    apiSiteEntries.forEach(([key, site]) => {
-      if (!existed.has(key)) {
-        adminConfig!.SourceConfig.push({
-          key,
-          name: site.name,
-          api: site.api,
-          detail: site.detail,
-          from: 'config',
-          disabled: false,
-          is_adult: (site as any).is_adult || false, // 确保处理 is_adult 字段
-        });
-      }
-    });
-
-    // 检查现有源是否在 fileConfig.api_site 中，如果不在则标记为 custom
-    const apiSiteKeys = new Set(apiSiteEntries.map(([key]) => key));
-    adminConfig.SourceConfig.forEach((source) => {
-      if (!apiSiteKeys.has(source.key)) {
-        source.from = 'custom';
-      } else {
-        // 更新现有源的 is_adult 字段
-        const siteConfig = fileConfig.api_site[source.key];
-        if (siteConfig) {
-          source.is_adult = (siteConfig as any).is_adult || false;
-        }
-      }
-    });
+    // SourceConfig 现在存储在独立的 source_configs 表中，不再在这里合并
 
     const ownerUser = process.env.USERNAME || '';
     // 检查配置中的站长用户是否和 USERNAME 匹配，如果不匹配则降级为普通用户
@@ -384,7 +379,7 @@ export async function resetConfig() {
   }
   cachedConfig.SiteConfig = adminConfig.SiteConfig;
   cachedConfig.UserConfig = adminConfig.UserConfig;
-  cachedConfig.SourceConfig = adminConfig.SourceConfig;
+  // SourceConfig 现在存储在独立的数据库表中，不再缓存
 }
 
 export async function getCacheTime(): Promise<number> {
@@ -393,44 +388,70 @@ export async function getCacheTime(): Promise<number> {
 }
 
 export async function getAvailableApiSites(filterAdult = false): Promise<ApiSite[]> {
-  const config = await getConfig();
+  const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
   
-  // 防御性检查：确保 SourceConfig 存在且为数组
-  if (!config.SourceConfig || !Array.isArray(config.SourceConfig)) {
-    console.warn('SourceConfig is missing or not an array, returning empty array');
+  if (storageType === 'localstorage') {
+    // 本地存储模式从文件配置读取
+    if (!fileConfig) {
+      fileConfig = runtimeConfig as unknown as ConfigFileStruct;
+    }
+    let sites = Object.entries(fileConfig.api_site).map(([key, site]) => ({
+      key,
+      name: site.name,
+      api: site.api,
+      detail: site.detail || '',
+      is_adult: (site as any).is_adult || false,
+      disabled: false
+    }));
+    
+    // 如果需要过滤成人内容，则排除标记为成人内容的资源站
+    if (filterAdult) {
+      sites = sites.filter((s) => !s.is_adult);
+    }
+    
+    return sites.map((s) => ({
+      key: s.key,
+      name: s.name,
+      api: s.api,
+      detail: s.detail,
+    }));
+  }
+
+  const storage = getStorage();
+  if (!storage || typeof storage.getAllSourceConfigs !== 'function') {
+    console.warn('Storage does not support SourceConfig operations');
     return [];
   }
-  
-  // 防御性处理：为每个源确保 is_adult 字段存在
-  let sites = config.SourceConfig
-    .filter((s) => !s.disabled)
-    .map((s) => ({
-      ...s,
-      is_adult: s.is_adult === true // 严格检查，只有明确为 true 的才是成人内容
+
+  try {
+    const allConfigs = await storage.getAllSourceConfigs();
+    let sites = allConfigs
+      .filter((s) => !s.disabled)
+      .map((s) => ({
+        ...s,
+        is_adult: s.is_adult === true // 严格检查，只有明确为 true 的才是成人内容
+      }));
+    
+    // 如果需要过滤成人内容，则排除标记为成人内容的资源站
+    if (filterAdult) {
+      sites = sites.filter((s) => !s.is_adult);
+    }
+    
+    return sites.map((s) => ({
+      key: s.source_key,
+      name: s.name,
+      api: s.api,
+      detail: s.detail,
     }));
-  
-  // 如果需要过滤成人内容，则排除标记为成人内容的资源站
-  if (filterAdult) {
-    sites = sites.filter((s) => !s.is_adult);
+  } catch (error) {
+    console.error('Failed to get available API sites:', error);
+    return [];
   }
-  
-  return sites.map((s) => ({
-    key: s.key,
-    name: s.name,
-    api: s.api,
-    detail: s.detail,
-  }));
 }
 
 // 根据用户设置动态获取可用资源站（你的想法实现）
 export async function getFilteredApiSites(userName?: string): Promise<ApiSite[]> {
-  const config = await getConfig();
-  
-  // 防御性检查：确保 SourceConfig 存在且为数组
-  if (!config.SourceConfig || !Array.isArray(config.SourceConfig)) {
-    console.warn('SourceConfig is missing or not an array, returning empty array');
-    return [];
-  }
+  const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
   
   // 默认过滤成人内容
   let shouldFilterAdult = true;
@@ -447,45 +468,105 @@ export async function getFilteredApiSites(userName?: string): Promise<ApiSite[]>
     }
   }
   
-  // 防御性处理：为每个源确保 is_adult 字段存在
-  let sites = config.SourceConfig
-    .filter((s) => !s.disabled)
-    .map((s) => ({
-      ...s,
-      is_adult: s.is_adult === true // 严格检查，只有明确为 true 的才是成人内容
+  if (storageType === 'localstorage') {
+    // 本地存储模式从文件配置读取
+    if (!fileConfig) {
+      fileConfig = runtimeConfig as unknown as ConfigFileStruct;
+    }
+    let sites = Object.entries(fileConfig.api_site).map(([key, site]) => ({
+      key,
+      name: site.name,
+      api: site.api,
+      detail: site.detail || '',
+      is_adult: (site as any).is_adult || false,
+      disabled: false
     }));
-  
-  // 根据用户设置动态过滤成人内容源
-  if (shouldFilterAdult) {
-    sites = sites.filter((s) => !s.is_adult);
+    
+    // 根据用户设置动态过滤成人内容源
+    if (shouldFilterAdult) {
+      sites = sites.filter((s) => !s.is_adult);
+    }
+    
+    return sites.map((s) => ({
+      key: s.key,
+      name: s.name,
+      api: s.api,
+      detail: s.detail,
+    }));
   }
-  
-  return sites.map((s) => ({
-    key: s.key,
-    name: s.name,
-    api: s.api,
-    detail: s.detail,
-  }));
+
+  const storage = getStorage();
+  if (!storage || typeof storage.getAllSourceConfigs !== 'function') {
+    console.warn('Storage does not support SourceConfig operations');
+    return [];
+  }
+
+  try {
+    const allConfigs = await storage.getAllSourceConfigs();
+    let sites = allConfigs
+      .filter((s) => !s.disabled)
+      .map((s) => ({
+        ...s,
+        is_adult: s.is_adult === true // 严格检查，只有明确为 true 的才是成人内容
+      }));
+    
+    // 根据用户设置动态过滤成人内容源
+    if (shouldFilterAdult) {
+      sites = sites.filter((s) => !s.is_adult);
+    }
+    
+    return sites.map((s) => ({
+      key: s.source_key,
+      name: s.name,
+      api: s.api,
+      detail: s.detail,
+    }));
+  } catch (error) {
+    console.error('Failed to get filtered API sites:', error);
+    return [];
+  }
 }
 
 // 获取成人内容资源站
 export async function getAdultApiSites(): Promise<ApiSite[]> {
-  const config = await getConfig();
+  const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
   
-  // 防御性检查：确保 SourceConfig 存在且为数组
-  if (!config.SourceConfig || !Array.isArray(config.SourceConfig)) {
-    console.warn('SourceConfig is missing or not an array, returning empty array');
+  if (storageType === 'localstorage') {
+    // 本地存储模式从文件配置读取
+    if (!fileConfig) {
+      fileConfig = runtimeConfig as unknown as ConfigFileStruct;
+    }
+    const adultSites = Object.entries(fileConfig.api_site)
+      .filter(([key, site]) => (site as any).is_adult === true)
+      .map(([key, site]) => ({
+        key,
+        name: site.name,
+        api: site.api,
+        detail: site.detail || '',
+      }));
+    
+    return adultSites;
+  }
+
+  const storage = getStorage();
+  if (!storage || typeof storage.getAllSourceConfigs !== 'function') {
+    console.warn('Storage does not support SourceConfig operations');
     return [];
   }
-  
-  // 防御性处理：严格检查成人内容标记
-  const adultSites = config.SourceConfig
-    .filter((s) => !s.disabled && s.is_adult === true); // 只有明确为 true 的才被认为是成人内容
-  
-  return adultSites.map((s) => ({
-    key: s.key,
-    name: s.name,
-    api: s.api,
-    detail: s.detail,
-  }));
+
+  try {
+    const allConfigs = await storage.getAllSourceConfigs();
+    const adultSites = allConfigs
+      .filter((s) => !s.disabled && s.is_adult === true); // 只有明确为 true 的才被认为是成人内容
+    
+    return adultSites.map((s) => ({
+      key: s.source_key,
+      name: s.name,
+      api: s.api,
+      detail: s.detail,
+    }));
+  } catch (error) {
+    console.error('Failed to get adult API sites:', error);
+    return [];
+  }
 }

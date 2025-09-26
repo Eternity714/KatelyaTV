@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 import { AdminConfig } from './admin.types';
-import { EpisodeSkipConfig, Favorite, IStorage, PlayRecord, UserSettings } from './types';
+import { EpisodeSkipConfig, Favorite, IStorage, PlayRecord, SourceConfig, UserSettings } from './types';
 
 /**
  * LocalStorage 存储实现
@@ -464,29 +464,72 @@ export class LocalStorage implements IStorage {
     if (typeof window === 'undefined') return;
     
     try {
-      // 删除用户账号
-      const userKey = this.getStorageKey('user', userName);
-      localStorage.removeItem(userKey);
-      
       // 删除用户相关的所有数据
-      const prefixes = ['playrecord', 'favorite', 'searchhistory', 'skipconfig', 'settings'];
+      const keysToDelete: string[] = [];
       
-      for (const prefix of prefixes) {
-        const dataPrefix = this.getStorageKey(prefix, userName);
-        const keysToRemove: string[] = [];
-        
-        for (let i = 0; i < localStorage.length; i++) {
-          const storageKey = localStorage.key(i);
-          if (storageKey && (storageKey === dataPrefix || storageKey.startsWith(dataPrefix + '_'))) {
-            keysToRemove.push(storageKey);
-          }
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.includes(`_${userName}_`)) {
+          keysToDelete.push(key);
         }
-        
-        keysToRemove.forEach(key => localStorage.removeItem(key));
       }
+      
+      // 删除用户记录
+      const userKey = this.getStorageKey('user', userName);
+      keysToDelete.push(userKey);
+      
+      // 删除用户设置
+      const settingsKey = this.getStorageKey('settings', userName);
+      keysToDelete.push(settingsKey);
+      
+      // 删除用户到期时间
+      const expiryKey = this.getStorageKey('expiry', userName);
+      keysToDelete.push(expiryKey);
+      
+      // 批量删除
+      keysToDelete.forEach(key => localStorage.removeItem(key));
     } catch (error) {
       console.error('Error deleting user:', error);
-      throw error;
     }
+  }
+
+  // ---------- 视频源配置相关（LocalStorage 不支持，返回空实现） ----------
+  async getAllSourceConfigs(): Promise<SourceConfig[]> {
+    console.warn('SourceConfig operations are not supported in LocalStorage mode');
+    return [];
+  }
+
+  async getSourceConfig(sourceKey: string): Promise<SourceConfig | null> {
+    console.warn('SourceConfig operations are not supported in LocalStorage mode');
+    return null;
+  }
+
+  async addSourceConfig(config: Omit<SourceConfig, 'id' | 'created_at' | 'updated_at'>): Promise<SourceConfig> {
+    console.warn('SourceConfig operations are not supported in LocalStorage mode');
+    throw new Error('SourceConfig operations are not supported in LocalStorage mode');
+  }
+
+  async updateSourceConfig(sourceKey: string, config: Partial<Omit<SourceConfig, 'id' | 'source_key' | 'created_at' | 'updated_at'>>): Promise<SourceConfig | null> {
+    console.warn('SourceConfig operations are not supported in LocalStorage mode');
+    return null;
+  }
+
+  async deleteSourceConfig(sourceKey: string): Promise<boolean> {
+    console.warn('SourceConfig operations are not supported in LocalStorage mode');
+    return false;
+  }
+
+  async enableSourceConfig(sourceKey: string): Promise<boolean> {
+    console.warn('SourceConfig operations are not supported in LocalStorage mode');
+    return false;
+  }
+
+  async disableSourceConfig(sourceKey: string): Promise<boolean> {
+    console.warn('SourceConfig operations are not supported in LocalStorage mode');
+    return false;
+  }
+
+  async reorderSourceConfigs(sourceKeys: string[]): Promise<void> {
+    console.warn('SourceConfig operations are not supported in LocalStorage mode');
   }
 }

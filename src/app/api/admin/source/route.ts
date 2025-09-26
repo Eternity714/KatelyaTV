@@ -3,14 +3,75 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getAuthInfoFromCookie } from '@/lib/auth';
-import { getConfig } from '@/lib/config';
+import { getConfig, getAvailableApiSites } from '@/lib/config';
 import { getStorage } from '@/lib/db';
-import { IStorage } from '@/lib/types';
+import { IStorage, SourceConfig } from '@/lib/types';
 
 export const runtime = 'edge';
 
 // 支持的操作类型
 type Action = 'add' | 'disable' | 'enable' | 'delete' | 'sort';
+
+// GET 方法：获取所有源配置
+export async function GET(request: NextRequest) {
+  const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
+  
+  try {
+    const authInfo = getAuthInfoFromCookie(request);
+    if (!authInfo || !authInfo.username) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const username = authInfo.username;
+
+    // 获取配置进行权限校验
+    const adminConfig = await getConfig();
+    
+    // 权限校验
+    if (username !== process.env.USERNAME) {
+      const userEntry = adminConfig.UserConfig.Users.find(
+        (u) => u.username === username
+      );
+      if (!userEntry || userEntry.role !== 'admin') {
+        return NextResponse.json({ error: '权限不足' }, { status: 401 });
+      }
+    }
+
+    if (storageType === 'localstorage') {
+        // 本地存储模式从文件配置读取
+        const sites = await getAvailableApiSites();
+        return NextResponse.json({ sources: sites });
+      }
+
+    const storage = getStorage();
+    if (!storage || typeof storage.getAllSourceConfigs !== 'function') {
+      return NextResponse.json(
+        { error: '当前存储不支持源配置管理' },
+        { status: 400 }
+      );
+    }
+
+    // 获取所有源配置
+    const allConfigs = await storage.getAllSourceConfigs();
+    
+    return NextResponse.json(
+      { sources: allConfigs },
+      {
+        headers: {
+          'Cache-Control': 'no-store',
+        },
+      }
+    );
+  } catch (error) {
+    console.error('获取源配置失败:', error);
+    return NextResponse.json(
+      {
+        error: '获取源配置失败',
+        details: (error as Error).message,
+      },
+      { status: 500 }
+    );
+  }
+}
 
 interface BaseBody {
   action?: Action;
@@ -47,6 +108,14 @@ export async function POST(request: NextRequest) {
     const adminConfig = await getConfig();
     const storage: IStorage | null = getStorage();
 
+    // 检查存储是否支持 SourceConfig 操作
+    if (!storage || typeof storage.getAllSourceConfigs !== 'function') {
+      return NextResponse.json(
+        { error: '当前存储不支持源配置管理' },
+        { status: 400 }
+      );
+    }
+
     // 权限与身份校验
     if (username !== process.env.USERNAME) {
       const userEntry = adminConfig.UserConfig.Users.find(
@@ -69,17 +138,23 @@ export async function POST(request: NextRequest) {
         if (!key || !name || !api) {
           return NextResponse.json({ error: '缺少必要参数' }, { status: 400 });
         }
-        if (adminConfig.SourceConfig.some((s) => s.key === key)) {
+        
+        // 检查源是否已存在
+        const existingConfig = await storage.getSourceConfig(key);
+        if (existingConfig) {
           return NextResponse.json({ error: '该源已存在' }, { status: 400 });
         }
-        adminConfig.SourceConfig.push({
-          key,
+        
+        // 添加新的源配置
+        await storage.addSourceConfig({
+          source_key: key,
           name,
           api,
-          detail,
-          from: 'custom',
+          detail: detail || '',
+          from_type: 'custom',
           disabled: false,
-          is_adult: is_adult || false, // 确保处理 is_adult 字段
+          is_adult: is_adult || false,
+          sort_order: 0
         });
         break;
       }
@@ -87,34 +162,47 @@ export async function POST(request: NextRequest) {
         const { key } = body as { key?: string };
         if (!key)
           return NextResponse.json({ error: '缺少 key 参数' }, { status: 400 });
-        const entry = adminConfig.SourceConfig.find((s) => s.key === key);
-        if (!entry)
+        
+        // 检查源是否存在
+        const existingConfig = await storage.getSourceConfig(key);
+        if (!existingConfig)
           return NextResponse.json({ error: '源不存在' }, { status: 404 });
-        entry.disabled = true;
+        
+        // 禁用源
+        await storage.disableSourceConfig(key);
         break;
       }
       case 'enable': {
         const { key } = body as { key?: string };
         if (!key)
           return NextResponse.json({ error: '缺少 key 参数' }, { status: 400 });
-        const entry = adminConfig.SourceConfig.find((s) => s.key === key);
-        if (!entry)
+        
+        // 检查源是否存在
+        const existingConfig = await storage.getSourceConfig(key);
+        if (!existingConfig)
           return NextResponse.json({ error: '源不存在' }, { status: 404 });
-        entry.disabled = false;
+        
+        // 启用源
+        await storage.enableSourceConfig(key);
         break;
       }
       case 'delete': {
         const { key } = body as { key?: string };
         if (!key)
           return NextResponse.json({ error: '缺少 key 参数' }, { status: 400 });
-        const idx = adminConfig.SourceConfig.findIndex((s) => s.key === key);
-        if (idx === -1)
+        
+        // 检查源是否存在
+        const existingConfig = await storage.getSourceConfig(key);
+        if (!existingConfig)
           return NextResponse.json({ error: '源不存在' }, { status: 404 });
-        const entry = adminConfig.SourceConfig[idx];
-        if (entry.from === 'config') {
+        
+        // 检查是否可以删除（来自配置文件的源不可删除）
+        if (existingConfig.from_type === 'config') {
           return NextResponse.json({ error: '该源不可删除' }, { status: 400 });
         }
-        adminConfig.SourceConfig.splice(idx, 1);
+        
+        // 删除源
+        await storage.deleteSourceConfig(key);
         break;
       }
       case 'sort': {
@@ -125,30 +213,16 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-        const map = new Map(adminConfig.SourceConfig.map((s) => [s.key, s]));
-        const newList: typeof adminConfig.SourceConfig = [];
-        order.forEach((k) => {
-          const item = map.get(k);
-          if (item) {
-            newList.push(item);
-            map.delete(k);
-          }
-        });
-        // 未在 order 中的保持原顺序
-        adminConfig.SourceConfig.forEach((item) => {
-          if (map.has(item.key)) newList.push(item);
-        });
-        adminConfig.SourceConfig = newList;
+        
+        // 重新排序源配置
+        await storage.reorderSourceConfigs(order);
         break;
       }
       default:
         return NextResponse.json({ error: '未知操作' }, { status: 400 });
     }
 
-    // 持久化到存储
-    if (storage && typeof (storage as any).setAdminConfig === 'function') {
-      await (storage as any).setAdminConfig(adminConfig);
-    }
+    // 数据库操作已经自动持久化，无需额外保存
 
     return NextResponse.json(
       { ok: true },

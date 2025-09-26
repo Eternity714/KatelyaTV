@@ -3,7 +3,7 @@
 import { Redis } from '@upstash/redis';
 
 import { AdminConfig } from './admin.types';
-import { EpisodeSkipConfig, Favorite, IStorage, PlayRecord, UserSettings } from './types';
+import { EpisodeSkipConfig, Favorite, IStorage, PlayRecord, SourceConfig, UserSettings } from './types';
 
 // 搜索历史最大条数
 const SEARCH_HISTORY_LIMIT = 20;
@@ -389,10 +389,7 @@ export class UpstashRedisStorage implements IStorage {
     );
   }
 
-  async updateUserSettings(
-    userName: string,
-    settings: Partial<UserSettings>
-  ): Promise<void> {
+  async updateUserSettings(userName: string, settings: Partial<UserSettings>): Promise<void> {
     const current = await this.getUserSettings(userName);
     const defaultSettings: UserSettings = {
       filter_adult_content: true,
@@ -408,6 +405,46 @@ export class UpstashRedisStorage implements IStorage {
       filter_adult_content: settings.filter_adult_content ?? current?.filter_adult_content ?? true
     };
     await this.setUserSettings(userName, updated);
+  }
+
+  // ---------- 视频源配置相关（Upstash 不支持，返回空实现） ----------
+  async getAllSourceConfigs(): Promise<SourceConfig[]> {
+    console.warn('SourceConfig operations are not supported in Upstash mode');
+    return [];
+  }
+
+  async getSourceConfig(sourceKey: string): Promise<SourceConfig | null> {
+    console.warn('SourceConfig operations are not supported in Upstash mode');
+    return null;
+  }
+
+  async addSourceConfig(config: Omit<SourceConfig, 'id' | 'created_at' | 'updated_at'>): Promise<SourceConfig> {
+    console.warn('SourceConfig operations are not supported in Upstash mode');
+    throw new Error('SourceConfig operations are not supported in Upstash mode');
+  }
+
+  async updateSourceConfig(sourceKey: string, config: Partial<Omit<SourceConfig, 'id' | 'source_key' | 'created_at' | 'updated_at'>>): Promise<SourceConfig | null> {
+    console.warn('SourceConfig operations are not supported in Upstash mode');
+    return null;
+  }
+
+  async deleteSourceConfig(sourceKey: string): Promise<boolean> {
+    console.warn('SourceConfig operations are not supported in Upstash mode');
+    return false;
+  }
+
+  async enableSourceConfig(sourceKey: string): Promise<boolean> {
+    console.warn('SourceConfig operations are not supported in Upstash mode');
+    return false;
+  }
+
+  async disableSourceConfig(sourceKey: string): Promise<boolean> {
+    console.warn('SourceConfig operations are not supported in Upstash mode');
+    return false;
+  }
+
+  async reorderSourceConfigs(sourceKeys: string[]): Promise<void> {
+    console.warn('SourceConfig operations are not supported in Upstash mode');
   }
 }
 

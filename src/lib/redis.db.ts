@@ -3,7 +3,7 @@
 import { createClient, RedisClientType } from 'redis';
 
 import { AdminConfig } from './admin.types';
-import { EpisodeSkipConfig, Favorite, IStorage, PlayRecord, UserSettings } from './types';
+import { EpisodeSkipConfig, Favorite, IStorage, PlayRecord, SourceConfig, UserSettings } from './types';
 
 // 搜索历史最大条数
 const SEARCH_HISTORY_LIMIT = 20;
@@ -429,6 +429,46 @@ export class RedisStorage implements IStorage {
       // 从用户的跳过配置集合中移除
       await this.client.sRem(this.skipConfigsKey(userName), key);
     });
+  }
+
+  // ---------- 视频源配置相关（Redis 不支持，返回空实现） ----------
+  async getAllSourceConfigs(): Promise<SourceConfig[]> {
+    console.warn('SourceConfig operations are not supported in Redis mode');
+    return [];
+  }
+
+  async getSourceConfig(sourceKey: string): Promise<SourceConfig | null> {
+    console.warn('SourceConfig operations are not supported in Redis mode');
+    return null;
+  }
+
+  async addSourceConfig(config: Omit<SourceConfig, 'id' | 'created_at' | 'updated_at'>): Promise<SourceConfig> {
+    console.warn('SourceConfig operations are not supported in Redis mode');
+    throw new Error('SourceConfig operations are not supported in Redis mode');
+  }
+
+  async updateSourceConfig(sourceKey: string, config: Partial<Omit<SourceConfig, 'id' | 'source_key' | 'created_at' | 'updated_at'>>): Promise<SourceConfig | null> {
+    console.warn('SourceConfig operations are not supported in Redis mode');
+    return null;
+  }
+
+  async deleteSourceConfig(sourceKey: string): Promise<boolean> {
+    console.warn('SourceConfig operations are not supported in Redis mode');
+    return false;
+  }
+
+  async enableSourceConfig(sourceKey: string): Promise<boolean> {
+    console.warn('SourceConfig operations are not supported in Redis mode');
+    return false;
+  }
+
+  async disableSourceConfig(sourceKey: string): Promise<boolean> {
+    console.warn('SourceConfig operations are not supported in Redis mode');
+    return false;
+  }
+
+  async reorderSourceConfigs(sourceKeys: string[]): Promise<void> {
+    console.warn('SourceConfig operations are not supported in Redis mode');
   }
 }
 

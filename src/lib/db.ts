@@ -208,6 +208,62 @@ export class DbManager {
     }
   }
 
+  // ---------- 视频源配置相关 ----------
+  async getAllSourceConfigs(): Promise<import('./types').SourceConfig[]> {
+    if (typeof (this.storage as any).getAllSourceConfigs === 'function') {
+      return (this.storage as any).getAllSourceConfigs();
+    }
+    return [];
+  }
+
+  async getSourceConfig(sourceKey: string): Promise<import('./types').SourceConfig | null> {
+    if (typeof (this.storage as any).getSourceConfig === 'function') {
+      return (this.storage as any).getSourceConfig(sourceKey);
+    }
+    return null;
+  }
+
+  async addSourceConfig(config: Omit<import('./types').SourceConfig, 'id' | 'created_at' | 'updated_at'>): Promise<import('./types').SourceConfig> {
+    if (typeof (this.storage as any).addSourceConfig === 'function') {
+      return (this.storage as any).addSourceConfig(config);
+    }
+    throw new Error('addSourceConfig not supported by current storage');
+  }
+
+  async updateSourceConfig(sourceKey: string, config: Partial<Omit<import('./types').SourceConfig, 'id' | 'source_key' | 'created_at' | 'updated_at'>>): Promise<import('./types').SourceConfig | null> {
+    if (typeof (this.storage as any).updateSourceConfig === 'function') {
+      return (this.storage as any).updateSourceConfig(sourceKey, config);
+    }
+    return null;
+  }
+
+  async deleteSourceConfig(sourceKey: string): Promise<boolean> {
+    if (typeof (this.storage as any).deleteSourceConfig === 'function') {
+      return (this.storage as any).deleteSourceConfig(sourceKey);
+    }
+    return false;
+  }
+
+  async enableSourceConfig(sourceKey: string): Promise<boolean> {
+    if (typeof (this.storage as any).enableSourceConfig === 'function') {
+      return (this.storage as any).enableSourceConfig(sourceKey);
+    }
+    return false;
+  }
+
+  async disableSourceConfig(sourceKey: string): Promise<boolean> {
+    if (typeof (this.storage as any).disableSourceConfig === 'function') {
+      return (this.storage as any).disableSourceConfig(sourceKey);
+    }
+    return false;
+  }
+
+  async reorderSourceConfigs(sourceKeys: string[]): Promise<void> {
+    if (typeof (this.storage as any).reorderSourceConfigs === 'function') {
+      await (this.storage as any).reorderSourceConfigs(sourceKeys);
+    }
+  }
+
   // ---------- 跳过配置 ----------
   async getSkipConfig(
     userName: string,

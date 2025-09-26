@@ -16,15 +16,7 @@ export interface AdminConfig {
       expires_at?: string | null; // 用户到期时间，ISO 8601 格式字符串，null 表示永不过期
     }[];
   };
-  SourceConfig: {
-    key: string;
-    name: string;
-    api: string;
-    detail?: string;
-    from: 'config' | 'custom';
-    disabled?: boolean;
-    is_adult?: boolean; // 新增：是否为成人内容资源站
-  }[];
+  // SourceConfig 已迁移到独立的 source_configs 数据库表
 }
 
 export interface AdminConfigResult {
