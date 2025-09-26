@@ -10,7 +10,7 @@ import { IStorage, SourceConfig } from '@/lib/types';
 export const runtime = 'edge';
 
 // 支持的操作类型
-type Action = 'add' | 'disable' | 'enable' | 'delete' | 'sort';
+type Action = 'add' | 'disable' | 'enable' | 'delete' | 'sort' | 'batch_delete';
 
 // GET 方法：获取所有源配置
 export async function GET(request: NextRequest) {
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
     const username = authInfo.username;
 
     // 基础校验
-    const ACTIONS: Action[] = ['add', 'disable', 'enable', 'delete', 'sort'];
+    const ACTIONS: Action[] = ['add', 'disable', 'enable', 'delete', 'sort', 'batch_delete'];
     if (!username || !action || !ACTIONS.includes(action)) {
       return NextResponse.json({ error: '参数格式错误' }, { status: 400 });
     }
@@ -210,6 +210,57 @@ export async function POST(request: NextRequest) {
         // 删除源
         await storage.deleteSourceConfig(key);
         break;
+      }
+      case 'batch_delete': {
+        const { keys } = body as { keys?: string[] };
+        if (!Array.isArray(keys) || keys.length === 0) {
+          return NextResponse.json({ error: '缺少 keys 参数或参数为空' }, { status: 400 });
+        }
+        
+        // 批量删除源配置
+        const results = [];
+        for (const key of keys) {
+          try {
+            // 检查源是否存在
+            const existingConfig = await storage.getSourceConfig(key);
+            if (!existingConfig) {
+              results.push({ key, success: false, error: '源不存在' });
+              continue;
+            }
+            
+            // 检查是否可以删除（来自配置文件的源不可删除）
+            if (existingConfig.from_type === 'config') {
+              results.push({ key, success: false, error: '该源不可删除' });
+              continue;
+            }
+            
+            // 删除源
+            await storage.deleteSourceConfig(key);
+            results.push({ key, success: true });
+          } catch (error) {
+            results.push({ 
+              key, 
+              success: false, 
+              error: (error as Error).message 
+            });
+          }
+        }
+        
+        // 返回批量删除结果
+        return NextResponse.json(
+          { 
+            ok: true, 
+            results,
+            total: keys.length,
+            success_count: results.filter(r => r.success).length,
+            failed_count: results.filter(r => !r.success).length
+          },
+          {
+            headers: {
+              'Cache-Control': 'no-store',
+            },
+          }
+        );
       }
       case 'sort': {
         const { order } = body as { order?: string[] };

@@ -1005,68 +1005,126 @@ const VideoSourceConfig = ({
 
     if (!result.isConfirmed) return;
 
-    // 批量删除逐个进行，显示进度
-    let successCount = 0;
-    let errorCount = 0;
-    const errors: string[] = [];
+    // 显示删除进度
+    Swal.fire({
+      title: '正在删除...',
+      text: '请稍候，正在批量删除视频源',
+      showConfirmButton: false,
+      showCancelButton: false,
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
 
-    for (let i = 0; i < selectedArray.length; i++) {
-      const key = selectedArray[i];
-      try {
-        await callSourceApi({ action: 'delete', key });
-        successCount++;
+    try {
+      // 使用新的批量删除API
+      const response = await callSourceApi({ 
+        action: 'batch_delete', 
+        keys: selectedArray 
+      });
 
-        // 显示进度
-        if (selectedArray.length > 1) {
+      // 处理批量删除结果
+      const { results, total, success_count, failed_count } = response;
+      
+      if (failed_count === 0) {
+        // 全部删除成功
+        showSuccess(`成功删除 ${success_count} 个视频源`);
+        setSelectedSources(new Set()); // 清空选择
+        setBatchMode(false); // 退出批量模式
+      } else {
+        // 部分删除失败，显示详细结果
+        const failedResults = results.filter((r: any) => !r.success);
+        const errors = failedResults.map((r: any) => {
+          const sourceName = sources.find(s => s.key === r.key)?.name || r.key;
+          return `${sourceName}: ${r.error}`;
+        });
+
+        await Swal.fire({
+          title: '删除完成',
+          html: `
+            <div class="text-left">
+              <p class="text-green-600 mb-2">✅ 成功删除: ${success_count} 个</p>
+              <p class="text-red-600 mb-2">❌ 删除失败: ${failed_count} 个</p>
+              ${errors.length > 0 ? `
+                <details class="mt-3">
+                  <summary class="cursor-pointer text-gray-600">查看错误详情</summary>
+                  <div class="mt-2 text-sm text-gray-500 max-h-32 overflow-y-auto">
+                    ${errors.map(err => `<div class="py-1">${err}</div>`).join('')}
+                  </div>
+                </details>
+              ` : ''}
+            </div>
+          `,
+          icon: success_count > 0 ? 'warning' : 'error',
+          confirmButtonText: '确定'
+        });
+
+        // 只保留删除失败的选择项
+        const failedKeys = new Set(failedResults.map((r: any) => r.key));
+        setSelectedSources(failedKeys);
+      }
+    } catch (error) {
+      // 批量删除API调用失败，回退到逐个删除
+      console.warn('批量删除API失败，回退到逐个删除:', error);
+      
+      let successCount = 0;
+      let errorCount = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < selectedArray.length; i++) {
+        const key = selectedArray[i];
+        try {
+          await callSourceApi({ action: 'delete', key });
+          successCount++;
+
+          // 更新进度
           Swal.update({
             title: '正在删除...',
             text: `进度: ${i + 1}/${selectedArray.length}`,
-            showConfirmButton: false,
-            showCancelButton: false,
-            allowOutsideClick: false
           });
+        } catch (error) {
+          errorCount++;
+          const sourceName = sources.find(s => s.key === key)?.name || key;
+          errors.push(`${sourceName}: ${error instanceof Error ? error.message : '删除失败'}`);
         }
-      } catch (error) {
-        errorCount++;
-        const sourceName = sources.find(s => s.key === key)?.name || key;
-        errors.push(`${sourceName}: ${error instanceof Error ? error.message : '删除失败'}`);
       }
-    }
 
-    // 显示删除结果
-    if (errorCount === 0) {
-      showSuccess(`成功删除 ${successCount} 个视频源`);
-      setSelectedSources(new Set()); // 清空选择
-      setBatchMode(false); // 退出批量模式
-    } else {
-      await Swal.fire({
-        title: '删除完成',
-        html: `
-          <div class="text-left">
-            <p class="text-green-600 mb-2">✅ 成功删除: ${successCount} 个</p>
-            <p class="text-red-600 mb-2">❌ 删除失败: ${errorCount} 个</p>
-            ${errors.length > 0 ? `
-              <details class="mt-3">
-                <summary class="cursor-pointer text-gray-600">查看错误详情</summary>
-                <div class="mt-2 text-sm text-gray-500 max-h-32 overflow-y-auto">
-                  ${errors.map(err => `<div class="py-1">${err}</div>`).join('')}
-                </div>
-              </details>
-            ` : ''}
-          </div>
-        `,
-        icon: successCount > 0 ? 'warning' : 'error',
-        confirmButtonText: '确定'
-      });
+      // 显示删除结果
+      if (errorCount === 0) {
+        showSuccess(`成功删除 ${successCount} 个视频源`);
+        setSelectedSources(new Set());
+        setBatchMode(false);
+      } else {
+        await Swal.fire({
+          title: '删除完成',
+          html: `
+            <div class="text-left">
+              <p class="text-green-600 mb-2">✅ 成功删除: ${successCount} 个</p>
+              <p class="text-red-600 mb-2">❌ 删除失败: ${errorCount} 个</p>
+              ${errors.length > 0 ? `
+                <details class="mt-3">
+                  <summary class="cursor-pointer text-gray-600">查看错误详情</summary>
+                  <div class="mt-2 text-sm text-gray-500 max-h-32 overflow-y-auto">
+                    ${errors.map(err => `<div class="py-1">${err}</div>`).join('')}
+                  </div>
+                </details>
+              ` : ''}
+            </div>
+          `,
+          icon: successCount > 0 ? 'warning' : 'error',
+          confirmButtonText: '确定'
+        });
 
-      // 清空已成功删除的选择项
-      const failedKeys = new Set(
-        errors.map(err => {
-          const keyMatch = err.split(':')[0];
-          return sources.find(s => s.name === keyMatch)?.key;
-        }).filter((key): key is string => Boolean(key))
-      );
-      setSelectedSources(failedKeys);
+        // 清空已成功删除的选择项
+        const failedKeys = new Set(
+          errors.map(err => {
+            const keyMatch = err.split(':')[0];
+            return sources.find(s => s.name === keyMatch)?.key;
+          }).filter((key): key is string => Boolean(key))
+        );
+        setSelectedSources(failedKeys);
+      }
     }
 
     await refreshConfig();
