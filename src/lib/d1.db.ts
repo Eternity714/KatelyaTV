@@ -651,12 +651,27 @@ export class D1Storage implements IStorage {
     try {
       const db = await this.getDatabase();
       const row = await db
-        .prepare('SELECT settings FROM user_settings WHERE username = ?')
+        .prepare(`
+          SELECT 
+            filter_adult_content,
+            theme,
+            language,
+            auto_play,
+            video_quality
+          FROM user_settings 
+          WHERE username = ?
+        `)
         .bind(userName)
         .first();
       
-      if (row && row.settings) {
-        return JSON.parse(row.settings as string) as UserSettings;
+      if (row) {
+        return {
+          filter_adult_content: Boolean(row.filter_adult_content),
+          theme: row.theme as 'light' | 'dark' | 'auto',
+          language: row.language as string,
+          auto_play: Boolean(row.auto_play),
+          video_quality: row.video_quality as string
+        };
       }
       return null;
     } catch (err) {
@@ -673,10 +688,25 @@ export class D1Storage implements IStorage {
       const db = await this.getDatabase();
       await db
         .prepare(`
-          INSERT OR REPLACE INTO user_settings (username, settings, updated_time)
-          VALUES (?, ?, ?)
+          INSERT OR REPLACE INTO user_settings (
+            username, 
+            filter_adult_content, 
+            theme, 
+            language, 
+            auto_play, 
+            video_quality, 
+            updated_time
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
         `)
-        .bind(userName, JSON.stringify(settings), Date.now())
+        .bind(
+          userName,
+          settings.filter_adult_content ? 1 : 0,
+          settings.theme,
+          settings.language,
+          settings.auto_play ? 1 : 0,
+          settings.video_quality,
+          Date.now()
+        )
         .run();
     } catch (err) {
       console.error('Failed to set user settings:', err);
@@ -691,14 +721,65 @@ export class D1Storage implements IStorage {
     try {
       const db = await this.getDatabase();
       const currentSettings = await this.getUserSettings(userName);
-      const newSettings = { ...currentSettings, ...settings };
+      
+      // 如果用户设置不存在，创建默认设置
+      if (!currentSettings) {
+        const defaultSettings: UserSettings = {
+          filter_adult_content: true,
+          theme: 'auto',
+          language: 'zh-CN',
+          auto_play: false,
+          video_quality: 'auto'
+        };
+        const newSettings: UserSettings = {
+          filter_adult_content: settings.filter_adult_content ?? defaultSettings.filter_adult_content,
+          theme: settings.theme ?? defaultSettings.theme,
+          language: settings.language ?? defaultSettings.language,
+          auto_play: settings.auto_play ?? defaultSettings.auto_play,
+          video_quality: settings.video_quality ?? defaultSettings.video_quality
+        };
+        await this.setUserSettings(userName, newSettings);
+        return;
+      }
 
-      await db
-        .prepare(
-          'INSERT OR REPLACE INTO user_settings (username, settings) VALUES (?, ?)'
-        )
-        .bind(userName, JSON.stringify(newSettings))
-        .run();
+      // 构建动态更新 SQL
+      const updateFields: string[] = [];
+      const values: any[] = [];
+
+      if (settings.filter_adult_content !== undefined) {
+        updateFields.push('filter_adult_content = ?');
+        values.push(settings.filter_adult_content ? 1 : 0);
+      }
+      if (settings.theme !== undefined) {
+        updateFields.push('theme = ?');
+        values.push(settings.theme);
+      }
+      if (settings.language !== undefined) {
+        updateFields.push('language = ?');
+        values.push(settings.language);
+      }
+      if (settings.auto_play !== undefined) {
+        updateFields.push('auto_play = ?');
+        values.push(settings.auto_play ? 1 : 0);
+      }
+      if (settings.video_quality !== undefined) {
+        updateFields.push('video_quality = ?');
+        values.push(settings.video_quality);
+      }
+
+      if (updateFields.length > 0) {
+        updateFields.push('updated_time = ?');
+        values.push(Date.now());
+        values.push(userName); // WHERE 条件的参数
+
+        const sql = `
+          UPDATE user_settings 
+          SET ${updateFields.join(', ')} 
+          WHERE username = ?
+        `;
+
+        await db.prepare(sql).bind(...values).run();
+      }
     } catch (err) {
       console.error('Failed to update user settings:', err);
       throw err;

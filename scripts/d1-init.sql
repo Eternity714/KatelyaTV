@@ -71,17 +71,16 @@ CREATE TABLE IF NOT EXISTS skip_configs (
 -- 用户设置表
 CREATE TABLE IF NOT EXISTS user_settings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL,
-  username TEXT NOT NULL,
-  filter_adult_content BOOLEAN DEFAULT 1,
-  theme TEXT DEFAULT 'auto',
-  language TEXT DEFAULT 'zh-CN',
-  auto_play BOOLEAN DEFAULT 1,
-  video_quality TEXT DEFAULT 'auto',
+  username TEXT NOT NULL UNIQUE,
+  filter_adult_content BOOLEAN DEFAULT 1, -- 是否过滤成人内容，默认为 true
+  theme TEXT DEFAULT 'auto', -- 主题：'light' | 'dark' | 'auto'
+  language TEXT DEFAULT 'zh-CN', -- 语言设置
+  auto_play BOOLEAN DEFAULT 0, -- 是否自动播放，默认为 false
+  video_quality TEXT DEFAULT 'auto', -- 视频质量设置
+  updated_time INTEGER NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  UNIQUE (user_id, username)
+  FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
 );
 
 -- 管理员配置表

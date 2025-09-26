@@ -73,6 +73,23 @@ export async function PATCH(request: NextRequest) {
 
     const storage = getStorage();
     
+    // 在 localstorage 模式下，服务器端无法操作 localStorage，返回特殊响应
+    const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
+    if (storageType === 'localstorage') {
+      return NextResponse.json({ 
+        success: true,
+        message: '设置更新成功',
+        clientSideUpdate: true,
+        settings: settings
+      }, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+    }
+
     // 验证用户存在
     const userExists = await storage.checkUserExist(userName);
     if (!userExists) {
@@ -123,6 +140,17 @@ export async function PUT(request: NextRequest) {
 
     const storage = getStorage();
     
+    // 在 localstorage 模式下，服务器端无法操作 localStorage，返回特殊响应
+    const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
+    if (storageType === 'localstorage') {
+      return NextResponse.json({ 
+        success: true,
+        message: '设置已重置',
+        clientSideUpdate: true,
+        settings: settings
+      });
+    }
+
     // 验证用户存在
     const userExists = await storage.checkUserExist(userName);
     if (!userExists) {

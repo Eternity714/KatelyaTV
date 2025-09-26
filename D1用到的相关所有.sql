@@ -43,8 +43,14 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS user_settings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT NOT NULL UNIQUE,
-  settings TEXT NOT NULL, -- JSON格式存储所有设置
+  filter_adult_content BOOLEAN DEFAULT 1, -- 是否过滤成人内容，默认为 true
+  theme TEXT DEFAULT 'auto', -- 主题：'light' | 'dark' | 'auto'
+  language TEXT DEFAULT 'zh-CN', -- 语言设置
+  auto_play BOOLEAN DEFAULT 0, -- 是否自动播放，默认为 false
+  video_quality TEXT DEFAULT 'auto', -- 视频质量设置
   updated_time INTEGER NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
 );
 
