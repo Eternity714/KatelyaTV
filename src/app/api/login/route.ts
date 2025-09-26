@@ -183,7 +183,26 @@ export async function POST(req: NextRequest) {
         // 如果获取角色失败，使用默认角色 'user'
       }
 
-      // TODO: 检查用户是否被封禁（需要在数据库中实现 banned 字段）
+      // 检查用户是否被封禁
+      try {
+        const isBanned = await db.getUserBanned(username);
+        if (isBanned) {
+          return NextResponse.json(
+            {
+              error: '您的账户已被封禁，无法登录。请联系管理员。',
+              banned: true
+            },
+            { status: 403 }
+          );
+        }
+      } catch (bannedCheckError) {
+        console.error('检查用户封禁状态失败:', bannedCheckError);
+        // 如果检查封禁状态失败，为了安全起见，拒绝登录
+        return NextResponse.json(
+          { error: '登录验证失败，请稍后重试' },
+          { status: 500 }
+        );
+      }
 
       // 检查用户是否已过期
       try {

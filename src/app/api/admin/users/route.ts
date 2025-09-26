@@ -59,18 +59,34 @@ export async function GET(request: NextRequest) {
             }
           }
 
+          // 获取用户封禁状态
+          let banned = false;
+          try {
+            banned = await storage.getUserBanned(username);
+          } catch (error) {
+            console.error(`获取用户 ${username} 封禁状态失败:`, error);
+          }
+
           return {
             username,
             role,
-            banned: false, // TODO: 需要在数据库中添加 banned 字段支持
+            banned,
             expires_at: expiryTime,
           };
         } catch (error) {
           console.error(`获取用户 ${username} 信息失败:`, error);
+          // 在错误情况下，尝试至少获取封禁状态
+          let banned = false;
+          try {
+            banned = await storage.getUserBanned(username);
+          } catch (bannedError) {
+            console.error(`获取用户 ${username} 封禁状态失败:`, bannedError);
+          }
+          
           return {
             username,
             role: 'user',
-            banned: false,
+            banned,
             expires_at: null,
           };
         }
