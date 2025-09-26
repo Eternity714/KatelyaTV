@@ -15,6 +15,12 @@ export async function GET(request: NextRequest) {
     }
 
     const { username } = authInfo;
+    
+    // 检查用户名是否存在
+    if (!username) {
+      return NextResponse.json({ error: '用户名缺失' }, { status: 401 });
+    }
+    
     const storage = getStorage();
     if (!storage) {
       return NextResponse.json({ error: '存储未初始化' }, { status: 500 });
