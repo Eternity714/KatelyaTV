@@ -1289,6 +1289,8 @@ const VideoSourceConfig = ({
             // 全部导入成功
             Swal.close(); // 关闭"正在导入..."弹框
             showSuccess(`成功导入 ${success_count} 个视频源`);
+            // 刷新视频源列表
+            await refreshConfig();
           } else {
             // 部分导入失败，显示详细结果
             const failedResults = results.filter((r: any) => !r.success);
@@ -1313,6 +1315,10 @@ const VideoSourceConfig = ({
               icon: success_count > 0 ? 'warning' : 'error',
               confirmButtonText: '确定'
             });
+            // 如果有成功导入的视频源，刷新列表
+            if (success_count > 0) {
+              await refreshConfig();
+            }
           }
         } catch (error) {
           // 批量导入 API 调用失败，回退到逐个导入
@@ -1360,6 +1366,8 @@ const VideoSourceConfig = ({
           if (errorCount === 0) {
             Swal.close(); // 关闭"正在导入..."弹框
             showSuccess(`成功导入 ${successCount} 个视频源`);
+            // 刷新视频源列表
+            await refreshConfig();
           } else {
             await Swal.fire({
               title: '导入完成',
@@ -1380,6 +1388,10 @@ const VideoSourceConfig = ({
               icon: successCount > 0 ? 'warning' : 'error',
               confirmButtonText: '确定'
             });
+            // 如果有成功导入的视频源，刷新列表
+            if (successCount > 0) {
+              await refreshConfig();
+            }
           }
         }
 
