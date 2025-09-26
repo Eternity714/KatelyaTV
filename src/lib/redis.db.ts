@@ -275,24 +275,7 @@ export class RedisStorage implements IStorage {
   }
 
   // ---------- 用户禁用状态 ----------
-  private userDisabledKey(user: string) {
-    return `u:${user}:disabled`; // u:username:disabled
-  }
 
-  // 获取用户禁用状态
-  async getUserDisabled(userName: string): Promise<boolean> {
-    const disabled = await withRetry(() =>
-      this.client.get(this.userDisabledKey(userName))
-    );
-    return disabled === 'true';
-  }
-
-  // 设置用户禁用状态
-  async setUserDisabled(userName: string, disabled: boolean): Promise<void> {
-    await withRetry(() =>
-      this.client.set(this.userDisabledKey(userName), disabled.toString())
-    );
-  }
 
   // ---------- 用户设置 ----------
   private userSettingsKey(user: string) {

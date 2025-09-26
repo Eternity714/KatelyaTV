@@ -550,31 +550,7 @@ export class LocalStorage implements IStorage {
     }
   }
 
-  // 获取用户禁用状态
-  async getUserDisabled(userName: string): Promise<boolean> {
-    if (typeof window === 'undefined') return false;
-    
-    try {
-      const storageKey = this.getStorageKey('disabled', userName);
-      const disabled = localStorage.getItem(storageKey);
-      return disabled === 'true';
-    } catch (error) {
-      console.error('Error getting user disabled status:', error);
-      return false;
-    }
-  }
 
-  // 设置用户禁用状态
-  async setUserDisabled(userName: string, disabled: boolean): Promise<void> {
-    if (typeof window === 'undefined') return;
-    
-    try {
-      const storageKey = this.getStorageKey('disabled', userName);
-      localStorage.setItem(storageKey, disabled.toString());
-    } catch (error) {
-      console.error('Error setting user disabled status:', error);
-    }
-  }
 
   // ---------- 源配置管理 ---------- 视频源配置相关（LocalStorage 不支持，返回空实现） ----------
   async getAllSourceConfigs(): Promise<SourceConfig[]> {

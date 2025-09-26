@@ -380,36 +380,7 @@ export class D1Storage implements IStorage {
     }
   }
 
-  // 获取用户禁用状态
-  async getUserDisabled(userName: string): Promise<boolean> {
-    try {
-      const db = await this.getDatabase();
-      const result = await db
-        .prepare('SELECT disable FROM users WHERE username = ?')
-        .bind(userName)
-        .first<{ disable: number }>();
 
-      // SQLite 中 BOOLEAN 存储为 0/1，需要转换为 boolean
-      return result?.disable === 1;
-    } catch (err) {
-      console.error('Failed to get user disabled status:', err);
-      throw err;
-    }
-  }
-
-  // 设置用户禁用状态
-  async setUserDisabled(userName: string, disabled: boolean): Promise<void> {
-    try {
-      const db = await this.getDatabase();
-      await db
-        .prepare('UPDATE users SET disable = ?, updated_at = CURRENT_TIMESTAMP WHERE username = ?')
-        .bind(disabled ? 1 : 0, userName)
-        .run();
-    } catch (err) {
-      console.error('Failed to set user disabled status:', err);
-      throw err;
-    }
-  }
 
   async changePassword(userName: string, newPassword: string): Promise<void> {
     try {

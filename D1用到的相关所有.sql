@@ -36,7 +36,6 @@ CREATE TABLE IF NOT EXISTS users (
   password TEXT NOT NULL,
   role TEXT DEFAULT 'user' CHECK (role IN ('user', 'vip', 'admin', 'owner')), -- 用户角色：user(普通用户), vip(VIP用户), admin(管理员), owner(站长)
   banned BOOLEAN DEFAULT 0, -- 是否被封禁，0表示未封禁，1表示已封禁
-  disable BOOLEAN DEFAULT 0, -- 是否被禁用，0表示未禁用，1表示已禁用
   expires_at DATETIME DEFAULT NULL, -- 用户到期时间，NULL表示永不过期
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP

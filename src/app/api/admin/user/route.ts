@@ -82,19 +82,10 @@ export async function GET(request: NextRequest) {
       console.error('获取用户封禁状态失败:', error);
     }
 
-    // 获取用户禁用状态
-    let disabled = false;
-    try {
-      disabled = await storage.getUserDisabled(targetUsername);
-    } catch (error) {
-      console.error('获取用户禁用状态失败:', error);
-    }
-
     return NextResponse.json({
       username: targetUsername,
       role: targetUserRole,
       banned: banned,
-      disabled: disabled, // 新增：返回用户禁用状态
       expires_at: expiryTime,
     });
   } catch (error) {
@@ -114,8 +105,6 @@ const ACTIONS = [
   'add',
   'ban',
   'unban',
-  'disable',    // 新增：禁用用户
-  'undisable',  // 新增：解除禁用用户
   'setAdmin',
   'cancelAdmin',
   'setVip',
@@ -309,61 +298,7 @@ export async function POST(request: NextRequest) {
           await storage.setUserBanned(targetUsername!, false);
           break;
         }
-        case 'disable': {
-          if (!targetUserExists) {
-            return NextResponse.json(
-              { error: '目标用户不存在' },
-              { status: 404 }
-            );
-          }
-          if (isTargetAdmin) {
-            // 目标是管理员
-            if (operatorRole !== 'owner') {
-              return NextResponse.json(
-                { error: '仅站长可禁用管理员' },
-                { status: 401 }
-              );
-            }
-          }
-          // 检查用户是否已被禁用
-          const isAlreadyDisabled = await storage.getUserDisabled(targetUsername!);
-          if (isAlreadyDisabled) {
-            return NextResponse.json(
-              { error: '用户已被禁用' },
-              { status: 400 }
-            );
-          }
-          // 禁用用户
-          await storage.setUserDisabled(targetUsername!, true);
-          break;
-        }
-        case 'undisable': {
-          if (!targetUserExists) {
-            return NextResponse.json(
-              { error: '目标用户不存在' },
-              { status: 404 }
-            );
-          }
-          if (isTargetAdmin) {
-            if (operatorRole !== 'owner') {
-              return NextResponse.json(
-                { error: '仅站长可操作管理员' },
-                { status: 401 }
-              );
-            }
-          }
-          // 检查用户是否已被禁用
-          const isDisabled = await storage.getUserDisabled(targetUsername!);
-          if (!isDisabled) {
-            return NextResponse.json(
-              { error: '用户未被禁用' },
-              { status: 400 }
-            );
-          }
-          // 解除禁用用户
-          await storage.setUserDisabled(targetUsername!, false);
-          break;
-        }
+
         case 'setAdmin': {
           if (!targetUserExists) {
             return NextResponse.json(

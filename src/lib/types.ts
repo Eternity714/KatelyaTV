@@ -102,10 +102,6 @@ export interface IStorage {
   getUserBanned(userName: string): Promise<boolean>;
   // 设置用户封禁状态
   setUserBanned(userName: string, banned: boolean): Promise<void>;
-  // 获取用户禁用状态
-  getUserDisabled(userName: string): Promise<boolean>;
-  // 设置用户禁用状态
-  setUserDisabled(userName: string, disabled: boolean): Promise<void>;
 
   // 用户设置相关
   getUserSettings(userName: string): Promise<UserSettings | null>;
