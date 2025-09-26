@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getConfig, getAvailableApiSites } from '@/lib/config';
+import { getAvailableApiSites } from '@/lib/config';
 
 // 强制使用 Edge Runtime 以支持 Cloudflare Pages
 export const runtime = 'edge';
@@ -52,9 +52,6 @@ export async function GET(request: NextRequest) {
     const protocol = request.headers.get('x-forwarded-proto') || 'http';
     const baseUrl = `${protocol}://${host}`;
 
-    // 读取当前配置
-    const config = await getConfig();
-    
     // 从新的源配置系统获取源站列表
     const sourceConfigs = await getAvailableApiSites();
     

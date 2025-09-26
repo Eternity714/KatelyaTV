@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
             try {
               expiryTime = await storage.getUserExpiryTime(username);
             } catch (error) {
-              console.error(`获取用户 ${username} 到期时间失败:`, error);
+              // 获取到期时间失败，使用默认值
             }
           }
 
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
           try {
             banned = await storage.getUserBanned(username);
           } catch (error) {
-            console.error(`获取用户 ${username} 封禁状态失败:`, error);
+            // 获取封禁状态失败，使用默认值
           }
 
           return {
@@ -74,13 +74,12 @@ export async function GET(request: NextRequest) {
             expires_at: expiryTime,
           };
         } catch (error) {
-          console.error(`获取用户 ${username} 信息失败:`, error);
-          // 在错误情况下，尝试至少获取封禁状态
+          // 获取用户信息失败，尝试至少获取封禁状态
           let banned = false;
           try {
             banned = await storage.getUserBanned(username);
           } catch (bannedError) {
-            console.error(`获取用户 ${username} 封禁状态失败:`, bannedError);
+            // 获取封禁状态失败，使用默认值
           }
           
           return {
@@ -95,7 +94,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ users });
   } catch (error) {
-    console.error('获取用户列表失败:', error);
     return NextResponse.json(
       {
         error: '获取用户列表失败',

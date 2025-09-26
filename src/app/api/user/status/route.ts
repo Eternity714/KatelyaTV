@@ -66,14 +66,12 @@ export async function GET(request: NextRequest) {
         });
       }
     } catch (error) {
-      console.error('检查用户到期时间失败:', error);
       return NextResponse.json(
         { error: '检查用户状态失败' },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error('用户状态检查API异常:', error);
     return NextResponse.json(
       { error: '服务器错误' },
       { status: 500 }

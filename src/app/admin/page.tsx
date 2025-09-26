@@ -1034,7 +1034,7 @@ const VideoSourceConfig = ({
       });
 
       // 处理批量删除结果
-      const { results, total, success_count, failed_count } = response;
+      const { results, total: _total, success_count, failed_count } = response;
       
       if (failed_count === 0) {
         // 全部删除成功
@@ -1182,7 +1182,7 @@ const VideoSourceConfig = ({
       });
 
       // 处理批量启用结果
-      const { results, total, success_count, failed_count } = response;
+      const { results, total: _total, success_count, failed_count } = response;
       
       if (failed_count === 0) {
         // 全部启用成功
@@ -1338,7 +1338,7 @@ const VideoSourceConfig = ({
       });
 
       // 处理批量禁用结果
-      const { results, total, success_count, failed_count } = response;
+      const { results, total: _total, success_count, failed_count } = response;
       
       if (failed_count === 0) {
         // 全部禁用成功
@@ -1595,7 +1595,7 @@ const VideoSourceConfig = ({
           });
 
           // 处理批量导入结果
-          const { results, total, success_count, failed_count } = response;
+          const { results, total: _total, success_count, failed_count } = response;
           
           if (failed_count === 0) {
             // 全部导入成功
@@ -2424,7 +2424,7 @@ function AdminPageClient() {
         setLoading(false);
       }
     }
-  }, []);
+  }, [showError]);
 
   useEffect(() => {
     // 首次加载时显示骨架
