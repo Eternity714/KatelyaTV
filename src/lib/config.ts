@@ -261,6 +261,29 @@ export async function getConfig(): Promise<AdminConfig> {
     adminConfig = await (storage as any).getAdminConfig();
   }
   if (adminConfig) {
+    // 获取所有用户名，用于补全 Users
+    let userNames: string[] = [];
+    if (storage && typeof (storage as any).getAllUsers === 'function') {
+      try {
+        userNames = await (storage as any).getAllUsers();
+      } catch (e) {
+        console.error('获取用户列表失败:', e);
+      }
+    }
+
+    // 合并用户列表 - 将数据库中的用户添加到配置中
+    const existedUsers = new Set(
+      (adminConfig.UserConfig.Users || []).map((u) => u.username)
+    );
+    userNames.forEach((uname) => {
+      if (!existedUsers.has(uname)) {
+        adminConfig!.UserConfig.Users.push({
+          username: uname,
+          role: 'user',
+        });
+      }
+    });
+
     // 合并一些环境变量配置
     adminConfig.SiteConfig.SiteName = process.env.SITE_NAME || 'KatelyaTV';
     adminConfig.SiteConfig.Announcement =
