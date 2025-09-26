@@ -122,10 +122,8 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
     password: '',
   });
   // 添加内联编辑到期时间的状态
-  const [editingExpiry, setEditingExpiry] = useState<{
-    username: string;
-    expiryTime: string;
-  } | null>(null);
+  const [editingExpiry, setEditingExpiry] = useState<string | null>(null);
+  const [editingExpiryTime, setEditingExpiryTime] = useState<string>('');
 
   // 当前登录用户名
   const currentUsername = getAuthInfoFromBrowserCookie()?.username || null;
@@ -268,18 +266,20 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
         .slice(0, 16);
     }
 
-    setEditingExpiry({ username, expiryTime: formattedExpiry });
+    setEditingExpiry(username);
+    setEditingExpiryTime(formattedExpiry);
   };
 
   // 保存到期时间
-  const handleSaveExpiry = async (username: string, expiryTime: string) => {
+  const handleSaveExpiry = async (username: string) => {
     // 如果输入了时间，转换为 ISO 字符串；否则设为 null（永不过期）
-    const finalExpiryTime = expiryTime
-      ? new Date(expiryTime).toISOString()
+    const finalExpiryTime = editingExpiryTime
+      ? new Date(editingExpiryTime).toISOString()
       : null;
 
     await handleUserAction('setUserExpiry', username, undefined, finalExpiryTime);
     setEditingExpiry(null);
+    setEditingExpiryTime('');
   };
 
   // 清除到期时间（设为永不过期）
@@ -291,6 +291,7 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
   // 取消编辑到期时间
   const handleCancelEditExpiry = () => {
     setEditingExpiry(null);
+    setEditingExpiryTime('');
   };
 
   // 通用请求函数
@@ -671,27 +672,19 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                             <div className='flex flex-col gap-2'>
                               <input
                                 type='datetime-local'
-                                value={(() => {
-                                  if (!user.expires_at) return '';
-                                  const date = new Date(user.expires_at);
-                                  // 转换为本地时间的 datetime-local 格式
-                                  const year = date.getFullYear();
-                                  const month = String(date.getMonth() + 1).padStart(2, '0');
-                                  const day = String(date.getDate()).padStart(2, '0');
-                                  const hours = String(date.getHours()).padStart(2, '0');
-                                  const minutes = String(date.getMinutes()).padStart(2, '0');
-                                  return `${year}-${month}-${day}T${hours}:${minutes}`;
-                                })()}
-                                onChange={(e) => {
-                                  const newValue = e.target.value;
-                                  if (newValue) {
-                                    handleSaveExpiry(user.username, newValue);
-                                  }
-                                }}
+                                value={editingExpiryTime}
+                                onChange={(e) => setEditingExpiryTime(e.target.value)}
                                 className='w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-orange-500 focus:border-transparent'
                                 title='选择到期时间'
                               />
                               <div className='flex gap-1'>
+                                <button
+                                  onClick={() => handleSaveExpiry(user.username)}
+                                  className='px-2 py-1 text-xs bg-orange-500 hover:bg-orange-600 text-white rounded transition-colors'
+                                  title='保存到期时间'
+                                >
+                                  保存
+                                </button>
                                 <button
                                   onClick={() => handleClearExpiry(user.username)}
                                   className='px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors'
