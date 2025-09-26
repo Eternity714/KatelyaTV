@@ -1242,13 +1242,33 @@ const VideoSourceConfig = ({
           className='px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 max-w-[12rem] truncate'
           title={source.api}
         >
-          {source.api}
+          <a
+            href={source.api}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {source.api}
+          </a>
         </td>
         <td
           className='px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 max-w-[8rem] truncate'
           title={source.detail || '-'}
         >
-          {source.detail || '-'}
+          {source.detail ? (
+            <a
+              href={source.detail}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {source.detail}
+            </a>
+          ) : (
+            <span className="text-gray-400 dark:text-gray-500">-</span>
+          )}
         </td>
         <td className='px-6 py-4 whitespace-nowrap max-w-[1rem]'>
           <span
