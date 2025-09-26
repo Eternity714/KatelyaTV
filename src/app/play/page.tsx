@@ -39,7 +39,11 @@ const isMobileDevice = () => {
 
 // 检查是否支持全屏API
 const supportsFullscreen = () => {
-  const video = document.createElement('video');
+  const video = document.createElement('video') as HTMLVideoElement & {
+    webkitRequestFullscreen?: () => Promise<void>;
+    mozRequestFullScreen?: () => Promise<void>;
+    msRequestFullscreen?: () => Promise<void>;
+  };
   return !!(
     video.requestFullscreen ||
     video.webkitRequestFullscreen ||
