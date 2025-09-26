@@ -27,16 +27,16 @@ export async function GET(request: NextRequest) {
     }
 
     // 权限检查：只有管理员和站长可以获取用户列表
-    let operatorRole = 'user';
+    let _operatorRole = 'user';
     if (username === process.env.USERNAME) {
-      operatorRole = 'owner';
+      _operatorRole = 'owner';
     } else {
       // 从数据库获取操作者角色
       const operatorUserRole = await storage.getUserRole(username);
       if (!operatorUserRole || (operatorUserRole !== 'admin' && operatorUserRole !== 'owner')) {
         return NextResponse.json({ error: '权限不足' }, { status: 401 });
       }
-      operatorRole = operatorUserRole;
+      _operatorRole = operatorUserRole;
     }
 
     // 获取所有用户名

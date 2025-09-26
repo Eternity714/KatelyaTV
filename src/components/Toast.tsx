@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+
+import { AlertTriangle, CheckCircle, Info, X, XCircle } from 'lucide-react';
 
 export interface ToastMessage {
   id: string;
@@ -20,6 +21,13 @@ const Toast = ({ message, onClose }: ToastProps) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
 
+  const handleClose = useCallback(() => {
+    setIsLeaving(true);
+    setTimeout(() => {
+      onClose(message.id);
+    }, 300); // 等待退出动画完成
+  }, [onClose, message.id]);
+
   useEffect(() => {
     // 进入动画
     const timer = setTimeout(() => setIsVisible(true), 10);
@@ -34,14 +42,7 @@ const Toast = ({ message, onClose }: ToastProps) => {
       clearTimeout(timer);
       clearTimeout(autoCloseTimer);
     };
-  }, [message.duration]);
-
-  const handleClose = () => {
-    setIsLeaving(true);
-    setTimeout(() => {
-      onClose(message.id);
-    }, 300); // 等待退出动画完成
-  };
+  }, [message.duration, handleClose]);
 
   const getIcon = () => {
     switch (message.type) {

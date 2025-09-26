@@ -486,37 +486,37 @@ export class RedisStorage implements IStorage {
     return [];
   }
 
-  async getSourceConfig(sourceKey: string): Promise<SourceConfig | null> {
+  async getSourceConfig(_sourceKey: string): Promise<SourceConfig | null> {
     console.warn('SourceConfig operations are not supported in Redis mode');
     return null;
   }
 
-  async addSourceConfig(config: Omit<SourceConfig, 'id' | 'created_at' | 'updated_at'>): Promise<SourceConfig> {
+  async addSourceConfig(_config: Omit<SourceConfig, 'id' | 'created_at' | 'updated_at'>): Promise<SourceConfig> {
     console.warn('SourceConfig operations are not supported in Redis mode');
     throw new Error('SourceConfig operations are not supported in Redis mode');
   }
 
-  async updateSourceConfig(sourceKey: string, config: Partial<Omit<SourceConfig, 'id' | 'source_key' | 'created_at' | 'updated_at'>>): Promise<SourceConfig | null> {
+  async updateSourceConfig(_sourceKey: string, _config: Partial<Omit<SourceConfig, 'id' | 'source_key' | 'created_at' | 'updated_at'>>): Promise<SourceConfig | null> {
     console.warn('SourceConfig operations are not supported in Redis mode');
     return null;
   }
 
-  async deleteSourceConfig(sourceKey: string): Promise<boolean> {
+  async deleteSourceConfig(_sourceKey: string): Promise<boolean> {
     console.warn('SourceConfig operations are not supported in Redis mode');
     return false;
   }
 
-  async enableSourceConfig(sourceKey: string): Promise<boolean> {
+  async enableSourceConfig(_sourceKey: string): Promise<boolean> {
     console.warn('SourceConfig operations are not supported in Redis mode');
     return false;
   }
 
-  async disableSourceConfig(sourceKey: string): Promise<boolean> {
+  async disableSourceConfig(_sourceKey: string): Promise<boolean> {
     console.warn('SourceConfig operations are not supported in Redis mode');
     return false;
   }
 
-  async reorderSourceConfigs(sourceKeys: string[]): Promise<void> {
+  async reorderSourceConfigs(_sourceKeys: string[]): Promise<void> {
     console.warn('SourceConfig operations are not supported in Redis mode');
   }
 }

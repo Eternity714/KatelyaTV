@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getAvailableApiSites, getConfig } from '@/lib/config';
 import { db, getStorage } from '@/lib/db';
-import { IStorage, SourceConfig } from '@/lib/types';
+import { IStorage } from '@/lib/types';
 
 export const runtime = 'edge';
 
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const username = authInfo.username;
 
     // 获取配置进行权限校验
-    const adminConfig = await getConfig();
+    const _adminConfig = await getConfig();
     
     // 权限校验
     if (username !== process.env.USERNAME) {
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 获取配置与存储
-    const adminConfig = await getConfig();
+    const _adminConfig = await getConfig();
     const storage: IStorage | null = getStorage();
 
     // 检查存储是否支持 SourceConfig 操作

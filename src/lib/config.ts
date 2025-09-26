@@ -2,7 +2,6 @@
 
 import { AdminConfig } from './admin.types';
 import { getStorage } from './db';
-import { SourceConfig } from './types';
 import runtimeConfig from './runtime';
 
 export interface ApiSite {

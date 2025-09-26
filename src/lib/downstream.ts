@@ -62,7 +62,7 @@ async function fetchWithRetry(url: string, options: RequestInit, retries: number
 export async function searchFromApi(
   apiSite: ApiSite,
   query: string,
-  includeAdult: boolean = false
+  includeAdult = false
 ): Promise<SearchResult[]> {
   try {
     const apiBaseUrl = apiSite.api;
@@ -201,9 +201,9 @@ export async function searchFromApi(
                 };
               });
           })
-          .catch((error) => {
-            console.error(`第${page}页搜索失败 ${apiName}:`, error);
-            return []; // 返回空数组而不是抛出错误
+          .catch(() => {
+            // 第${page}页搜索失败，返回空数组而不是抛出错误
+            return [];
           });
 
         additionalPagePromises.push(pagePromise);
@@ -219,15 +219,14 @@ export async function searchFromApi(
             results.push(...pageResults);
           }
         });
-      } catch (error) {
-        console.error(`额外页面搜索失败 ${apiName}:`, error);
-        // 即使额外页面失败，也返回第一页的结果
+      } catch {
+        // 额外页面搜索失败，即使失败也返回第一页的结果
       }
     }
 
     return results;
-  } catch (error) {
-    console.error(`搜索API失败 ${apiName}:`, error);
+  } catch {
+    // 搜索API失败，返回空数组
     return [];
   }
 }

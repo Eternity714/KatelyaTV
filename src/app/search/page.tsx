@@ -12,12 +12,10 @@ import {
   clearSearchHistory,
   deleteSearchHistory,
   getSearchHistory,
-  subscribeToDataUpdates,
 } from '@/lib/db.client';
 import { SearchResult } from '@/lib/types';
 
 import PageLayout from '@/components/PageLayout';
-import VideoCard from '@/components/VideoCard';
 
 // 防抖Hook
 function useDebounce<T>(value: T, delay: number): T {
