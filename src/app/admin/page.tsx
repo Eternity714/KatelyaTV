@@ -902,8 +902,17 @@ const VideoSourceConfig = ({
         throw new Error(data.error || `操作失败: ${resp.status}`);
       }
 
-      // 成功后刷新配置
+      // 获取响应数据
+      const responseData = await resp.json();
+
+      // 对于批量删除操作，直接返回响应数据，不刷新配置（由调用者处理）
+      if (body.action === 'batch_delete') {
+        return responseData;
+      }
+
+      // 其他操作成功后刷新配置
       await refreshConfig();
+      return responseData;
     } catch (err) {
       showError(err instanceof Error ? err.message : '操作失败');
       throw err; // 向上抛出方便调用处判断
