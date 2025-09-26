@@ -10,7 +10,7 @@ import { IStorage, SourceConfig } from '@/lib/types';
 export const runtime = 'edge';
 
 // 支持的操作类型
-type Action = 'add' | 'disable' | 'enable' | 'delete' | 'sort' | 'batch_delete';
+type Action = 'add' | 'disable' | 'enable' | 'delete' | 'sort' | 'batch_delete' | 'batch_add';
 
 // GET 方法：获取所有源配置
 export async function GET(request: NextRequest) {
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
     const username = authInfo.username;
 
     // 基础校验
-    const ACTIONS: Action[] = ['add', 'disable', 'enable', 'delete', 'sort', 'batch_delete'];
+    const ACTIONS: Action[] = ['add', 'disable', 'enable', 'delete', 'sort', 'batch_delete', 'batch_add'];
     if (!username || !action || !ACTIONS.includes(action)) {
       return NextResponse.json({ error: '参数格式错误' }, { status: 400 });
     }
@@ -252,6 +252,82 @@ export async function POST(request: NextRequest) {
             ok: true, 
             results,
             total: keys.length,
+            success_count: results.filter(r => r.success).length,
+            failed_count: results.filter(r => !r.success).length
+          },
+          {
+            headers: {
+              'Cache-Control': 'no-store',
+            },
+          }
+        );
+      }
+      case 'batch_add': {
+        const { sources } = body as { 
+          sources?: Array<{
+            key: string;
+            name: string;
+            api: string;
+            detail?: string;
+            is_adult?: boolean;
+          }> 
+        };
+        
+        if (!Array.isArray(sources) || sources.length === 0) {
+          return NextResponse.json({ error: '缺少 sources 参数或参数为空' }, { status: 400 });
+        }
+        
+        // 批量添加源配置
+        const results = [];
+        for (const source of sources) {
+          try {
+            const { key, name, api, detail, is_adult } = source;
+            
+            // 验证必要参数
+            if (!key || !name || !api) {
+              results.push({ 
+                key: key || '未知', 
+                success: false, 
+                error: '缺少必要参数 key、name 或 api' 
+              });
+              continue;
+            }
+            
+            // 检查源是否已存在
+            const existingConfig = await storage.getSourceConfig(key);
+            if (existingConfig) {
+              results.push({ key, success: false, error: '该源已存在' });
+              continue;
+            }
+            
+            // 添加新的源配置
+            await storage.addSourceConfig({
+              source_key: key,
+              name,
+              api,
+              detail: detail || '',
+              from_type: 'custom',
+              disabled: false,
+              is_adult: is_adult || false,
+              sort_order: 0
+            });
+            
+            results.push({ key, success: true });
+          } catch (error) {
+            results.push({ 
+              key: source.key || '未知', 
+              success: false, 
+              error: (error as Error).message 
+            });
+          }
+        }
+        
+        // 返回批量添加结果
+        return NextResponse.json(
+          { 
+            ok: true, 
+            results,
+            total: sources.length,
             success_count: results.filter(r => r.success).length,
             failed_count: results.filter(r => !r.success).length
           },

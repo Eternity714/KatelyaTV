@@ -905,8 +905,8 @@ const VideoSourceConfig = ({
       // 获取响应数据
       const responseData = await resp.json();
 
-      // 对于批量删除操作，直接返回响应数据，不刷新配置（由调用者处理）
-      if (body.action === 'batch_delete') {
+      // 对于批量操作，直接返回响应数据，不刷新配置（由调用者处理）
+      if (body.action === 'batch_delete' || body.action === 'batch_add') {
         return responseData;
       }
 
@@ -1218,62 +1218,169 @@ const VideoSourceConfig = ({
 
         if (!result.isConfirmed) return;
 
-        // 批量导入视频源
-        let successCount = 0;
-        let errorCount = 0;
-        const errors: string[] = [];
+        // 显示导入进度
+        Swal.fire({
+          title: '正在导入...',
+          text: '请稍候，正在批量导入视频源',
+          showConfirmButton: false,
+          showCancelButton: false,
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
 
-        for (const [key, source] of Object.entries(importConfig.api_site)) {
-          try {
+        try {
+          // 准备批量导入数据
+          const sources = [];
+          const validationErrors: string[] = [];
+
+          for (const [key, source] of Object.entries(importConfig.api_site)) {
             // 类型检查和验证
             if (!source || typeof source !== 'object' || Array.isArray(source)) {
-              throw new Error(`${key}: 无效的配置对象`);
+              validationErrors.push(`${key}: 无效的配置对象`);
+              continue;
             }
 
             const sourceObj = source as { api?: string; name?: string; detail?: string; is_adult?: boolean };
 
             if (!sourceObj.api || !sourceObj.name) {
-              throw new Error(`${key}: 缺少必要字段 api 或 name`);
+              validationErrors.push(`${key}: 缺少必要字段 api 或 name`);
+              continue;
             }
 
-            await callSourceApi({
-              action: 'add',
+            sources.push({
               key: key,
               name: sourceObj.name,
               api: sourceObj.api,
               detail: sourceObj.detail || '',
-              is_adult: sourceObj.is_adult || false // 确保处理 is_adult 字段
+              is_adult: sourceObj.is_adult || false
             });
-            successCount++;
-          } catch (error) {
-            errorCount++;
-            errors.push(`${key}: ${error instanceof Error ? error.message : '未知错误'}`);
           }
-        }
 
-        // 显示导入结果
-        if (errorCount === 0) {
-          showSuccess(`成功导入 ${successCount} 个视频源`);
-        } else {
-          await Swal.fire({
-            title: '导入完成',
-            html: `
-              <div class="text-left">
-                <p class="text-green-600 mb-2">✅ 成功导入: ${successCount} 个</p>
-                <p class="text-red-600 mb-2">❌ 导入失败: ${errorCount} 个</p>
-                ${errors.length > 0 ? `
-                  <details class="mt-3">
-                    <summary class="cursor-pointer text-gray-600">查看错误详情</summary>
-                    <div class="mt-2 text-sm text-gray-500 max-h-32 overflow-y-auto">
-                      ${errors.map(err => `<div class="py-1">${err}</div>`).join('')}
-                    </div>
-                  </details>
-                ` : ''}
-              </div>
-            `,
-            icon: successCount > 0 ? 'warning' : 'error',
-            confirmButtonText: '确定'
+          // 如果有验证错误，显示错误并停止导入
+          if (validationErrors.length > 0) {
+            await Swal.fire({
+              title: '配置验证失败',
+              html: `
+                <div class="text-left">
+                  <p class="text-red-600 mb-2">发现 ${validationErrors.length} 个配置错误：</p>
+                  <div class="mt-2 text-sm text-gray-500 max-h-32 overflow-y-auto">
+                    ${validationErrors.map(err => `<div class="py-1">${err}</div>`).join('')}
+                  </div>
+                </div>
+              `,
+              icon: 'error',
+              confirmButtonText: '确定'
+            });
+            return;
+          }
+
+          // 使用批量导入 API
+          const response = await callSourceApi({
+            action: 'batch_add',
+            sources: sources
           });
+
+          // 处理批量导入结果
+          const { results, total, success_count, failed_count } = response;
+          
+          if (failed_count === 0) {
+            // 全部导入成功
+            Swal.close(); // 关闭"正在导入..."弹框
+            showSuccess(`成功导入 ${success_count} 个视频源`);
+          } else {
+            // 部分导入失败，显示详细结果
+            const failedResults = results.filter((r: any) => !r.success);
+            const errors = failedResults.map((r: any) => `${r.key}: ${r.error}`);
+
+            await Swal.fire({
+              title: '导入完成',
+              html: `
+                <div class="text-left">
+                  <p class="text-green-600 mb-2">✅ 成功导入: ${success_count} 个</p>
+                  <p class="text-red-600 mb-2">❌ 导入失败: ${failed_count} 个</p>
+                  ${errors.length > 0 ? `
+                    <details class="mt-3">
+                      <summary class="cursor-pointer text-gray-600">查看错误详情</summary>
+                      <div class="mt-2 text-sm text-gray-500 max-h-32 overflow-y-auto">
+                        ${errors.map((err: string) => `<div class="py-1">${err}</div>`).join('')}
+                      </div>
+                    </details>
+                  ` : ''}
+                </div>
+              `,
+              icon: success_count > 0 ? 'warning' : 'error',
+              confirmButtonText: '确定'
+            });
+          }
+        } catch (error) {
+          // 批量导入 API 调用失败，回退到逐个导入
+          console.warn('批量导入API失败，回退到逐个导入:', error);
+          
+          let successCount = 0;
+          let errorCount = 0;
+          const errors: string[] = [];
+
+          for (const [key, source] of Object.entries(importConfig.api_site)) {
+            try {
+              // 类型检查和验证
+              if (!source || typeof source !== 'object' || Array.isArray(source)) {
+                throw new Error(`${key}: 无效的配置对象`);
+              }
+
+              const sourceObj = source as { api?: string; name?: string; detail?: string; is_adult?: boolean };
+
+              if (!sourceObj.api || !sourceObj.name) {
+                throw new Error(`${key}: 缺少必要字段 api 或 name`);
+              }
+
+              await callSourceApi({
+                action: 'add',
+                key: key,
+                name: sourceObj.name,
+                api: sourceObj.api,
+                detail: sourceObj.detail || '',
+                is_adult: sourceObj.is_adult || false
+              });
+              successCount++;
+
+              // 更新进度
+              Swal.update({
+                title: '正在导入...',
+                text: `进度: ${successCount + errorCount}/${Object.keys(importConfig.api_site).length}`,
+              });
+            } catch (error) {
+              errorCount++;
+              errors.push(`${key}: ${error instanceof Error ? error.message : '未知错误'}`);
+            }
+          }
+
+          // 显示回退导入结果
+          if (errorCount === 0) {
+            Swal.close(); // 关闭"正在导入..."弹框
+            showSuccess(`成功导入 ${successCount} 个视频源`);
+          } else {
+            await Swal.fire({
+              title: '导入完成',
+              html: `
+                <div class="text-left">
+                  <p class="text-green-600 mb-2">✅ 成功导入: ${successCount} 个</p>
+                  <p class="text-red-600 mb-2">❌ 导入失败: ${errorCount} 个</p>
+                  ${errors.length > 0 ? `
+                    <details class="mt-3">
+                      <summary class="cursor-pointer text-gray-600">查看错误详情</summary>
+                      <div class="mt-2 text-sm text-gray-500 max-h-32 overflow-y-auto">
+                        ${errors.map(err => `<div class="py-1">${err}</div>`).join('')}
+                      </div>
+                    </details>
+                  ` : ''}
+                </div>
+              `,
+              icon: successCount > 0 ? 'warning' : 'error',
+              confirmButtonText: '确定'
+            });
+          }
         }
 
       } catch (error) {
