@@ -1149,7 +1149,7 @@ function PlayPageClient() {
           'x5-video-player-type': 'h5',
           'x5-video-player-fullscreen': 'true',
           'x5-video-orientation': 'portraint',
-        },
+        } as Record<string, any>,
         // HLS 支持配置
         customType: {
           m3u8: function (video: HTMLVideoElement, url: string) {
