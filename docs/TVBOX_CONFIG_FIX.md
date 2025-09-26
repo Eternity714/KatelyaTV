@@ -19,21 +19,13 @@
 ### 1. 代码修复
 已修改 `src/lib/d1.db.ts` 中的 `getAdminConfig()` 和 `setAdminConfig()` 方法，使其使用正确的表名 `admin_configs`。
 
-### 2. 数据迁移
-创建了迁移脚本 `scripts/d1-migrate-admin-config.sql` 来处理现有数据。
-
 ## 部署步骤
 
 ### 对于新部署用户
 直接使用最新版本部署即可，无需额外操作。
 
 ### 对于现有用户
-需要运行数据迁移脚本：
-
-```bash
-# 运行迁移脚本
-wrangler d1 execute your-database-name --file=./scripts/d1-migrate-admin-config.sql
-```
+如果遇到表名不一致的问题，请重新初始化数据库或手动修改表名。
 
 ## 验证修复
 修复后，TVBox 配置生成应该能正常工作：
