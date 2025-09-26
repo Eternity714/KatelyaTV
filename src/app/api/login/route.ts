@@ -1,7 +1,6 @@
 /* eslint-disable no-console,@typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 
 export const runtime = 'edge';
@@ -173,7 +172,7 @@ export async function POST(req: NextRequest) {
       }
 
       // 从数据库获取用户角色
-      let userRole: string = 'user';
+      let userRole = 'user';
       try {
         const role = await db.getUserRole(username);
         if (role) {
