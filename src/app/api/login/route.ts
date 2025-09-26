@@ -1,7 +1,7 @@
 /* eslint-disable no-console,@typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 
-import { db } from '@/lib/db';
+import { db, getStorage } from '@/lib/db';
 
 export const runtime = 'edge';
 
@@ -185,15 +185,18 @@ export async function POST(req: NextRequest) {
 
       // 检查用户是否被封禁
       try {
-        const isBanned = await db.getUserBanned(username);
-        if (isBanned) {
-          return NextResponse.json(
-            {
-              error: '您的账户已被封禁，无法登录。请联系管理员。',
-              banned: true
-            },
-            { status: 403 }
-          );
+        const storage = getStorage();
+        if (storage) {
+          const isBanned = await storage.getUserBanned(username);
+          if (isBanned) {
+            return NextResponse.json(
+              {
+                error: '您的账户已被封禁，无法登录。请联系管理员。',
+                banned: true
+              },
+              { status: 403 }
+            );
+          }
         }
       } catch (bannedCheckError) {
         console.error('检查用户封禁状态失败:', bannedCheckError);
