@@ -238,8 +238,31 @@ VALUES ('main_config',
        '从旧表迁移的主要管理员配置');
 */
 
+-- =============================================
+-- 第七部分：用户数据迁移脚本
+-- =============================================
+
+-- 注意：以下迁移脚本用于将 admin_configs 表中的 UserConfig.Users 数据迁移到 users 表
+-- 建议使用 API 端点 /api/admin/migrate-users 或 JavaScript 脚本进行迁移
+-- 手动执行时需要先解析 JSON 数据
+
+-- 检查是否需要迁移用户数据
+-- SELECT 
+--   config_key,
+--   LENGTH(config_value) as config_size,
+--   CASE 
+--     WHEN config_value LIKE '%"Users":[%]%' THEN '需要迁移'
+--     WHEN config_value LIKE '%"Users":[]%' THEN '已迁移'
+--     ELSE '未知状态'
+--   END as migration_status
+-- FROM admin_configs 
+-- WHERE config_key = 'main_config';
+
+-- 查看当前用户表状态
+-- SELECT COUNT(*) as total_users FROM users;
+
 -- 更新版本信息
-UPDATE db_version SET version = '1.2.0', description = '完成数据迁移，包含用户到期时间功能' WHERE id = 1;
+UPDATE db_version SET version = '1.3.0', description = '完成数据迁移，包含用户到期时间功能和用户数据迁移脚本' WHERE id = 1;
 
 -- =============================================
 -- 第七部分：实用查询
