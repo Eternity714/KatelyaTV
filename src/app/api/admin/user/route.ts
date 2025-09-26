@@ -333,9 +333,10 @@ export async function POST(request: NextRequest) {
               { status: 404 }
             );
           }
-          if (targetEntry.role !== 'user') {
+          // 不能将站长设为VIP用户，但可以将普通用户和管理员设为VIP用户
+          if (targetEntry.role === 'owner') {
             return NextResponse.json(
-              { error: '只能将普通用户设为VIP用户' },
+              { error: '不能将站长设为VIP用户' },
               { status: 400 }
             );
           }
