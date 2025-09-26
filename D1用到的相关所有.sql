@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS users (
   username TEXT UNIQUE NOT NULL,
   password TEXT NOT NULL,
   role TEXT DEFAULT 'user' CHECK (role IN ('user', 'vip', 'admin', 'owner')), -- 用户角色：user(普通用户), vip(VIP用户), admin(管理员), owner(站长)
+  banned BOOLEAN DEFAULT 0, -- 是否被封禁，0表示未封禁，1表示已封禁
   expires_at DATETIME DEFAULT NULL, -- 用户到期时间，NULL表示永不过期
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -223,6 +224,10 @@ INSERT OR IGNORE INTO admin_configs (config_key, config_value, description) VALU
 -- =============================================
 -- 第六部分：数据迁移脚本
 -- =============================================
+
+-- 为现有用户表添加 banned 字段（如果不存在）
+-- 注意：SQLite 的 ALTER TABLE ADD COLUMN 语法
+ALTER TABLE users ADD COLUMN banned BOOLEAN DEFAULT 0;
 
 -- 注意：Cloudflare D1 不支持直接使用 SQL 的 BEGIN TRANSACTION 语句
 -- 应使用 JavaScript API: state.storage.transaction() 或 state.storage.transactionSync()

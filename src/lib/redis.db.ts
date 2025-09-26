@@ -254,6 +254,26 @@ export class RedisStorage implements IStorage {
     );
   }
 
+  // ---------- 用户封禁状态 ----------
+  private userBannedKey(user: string) {
+    return `u:${user}:banned`; // u:username:banned
+  }
+
+  // 获取用户封禁状态
+  async getUserBanned(userName: string): Promise<boolean> {
+    const banned = await withRetry(() =>
+      this.client.get(this.userBannedKey(userName))
+    );
+    return banned === 'true';
+  }
+
+  // 设置用户封禁状态
+  async setUserBanned(userName: string, banned: boolean): Promise<void> {
+    await withRetry(() =>
+      this.client.set(this.userBannedKey(userName), banned.toString())
+    );
+  }
+
   // ---------- 用户设置 ----------
   private userSettingsKey(user: string) {
     return `u:${user}:settings`; // u:username:settings

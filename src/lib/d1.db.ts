@@ -345,6 +345,37 @@ export class D1Storage implements IStorage {
     }
   }
 
+  // 获取用户封禁状态
+  async getUserBanned(userName: string): Promise<boolean> {
+    try {
+      const db = await this.getDatabase();
+      const result = await db
+        .prepare('SELECT banned FROM users WHERE username = ?')
+        .bind(userName)
+        .first<{ banned: number }>();
+
+      // SQLite 中 BOOLEAN 存储为 0/1，需要转换为 boolean
+      return result?.banned === 1;
+    } catch (err) {
+      console.error('Failed to get user banned status:', err);
+      throw err;
+    }
+  }
+
+  // 设置用户封禁状态
+  async setUserBanned(userName: string, banned: boolean): Promise<void> {
+    try {
+      const db = await this.getDatabase();
+      await db
+        .prepare('UPDATE users SET banned = ?, updated_at = CURRENT_TIMESTAMP WHERE username = ?')
+        .bind(banned ? 1 : 0, userName)
+        .run();
+    } catch (err) {
+      console.error('Failed to set user banned status:', err);
+      throw err;
+    }
+  }
+
   async changePassword(userName: string, newPassword: string): Promise<void> {
     try {
       const db = await this.getDatabase();

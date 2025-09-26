@@ -524,6 +524,32 @@ export class LocalStorage implements IStorage {
     }
   }
 
+  // 获取用户封禁状态
+  async getUserBanned(userName: string): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
+    
+    try {
+      const storageKey = this.getStorageKey('banned', userName);
+      const banned = localStorage.getItem(storageKey);
+      return banned === 'true';
+    } catch (error) {
+      console.error('Error getting user banned status:', error);
+      return false;
+    }
+  }
+
+  // 设置用户封禁状态
+  async setUserBanned(userName: string, banned: boolean): Promise<void> {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const storageKey = this.getStorageKey('banned', userName);
+      localStorage.setItem(storageKey, banned.toString());
+    } catch (error) {
+      console.error('Error setting user banned status:', error);
+    }
+  }
+
   // ---------- 视频源配置相关（LocalStorage 不支持，返回空实现） ----------
   async getAllSourceConfigs(): Promise<SourceConfig[]> {
     console.warn('SourceConfig operations are not supported in LocalStorage mode');

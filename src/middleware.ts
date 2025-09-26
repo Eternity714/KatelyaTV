@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getAuthInfoFromCookie } from '@/lib/auth';
+import { getStorage } from '@/lib/db';
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -32,6 +33,7 @@ export async function middleware(request: NextRequest) {
     if (!authInfo.password || authInfo.password !== process.env.PASSWORD) {
       return handleAuthFailure(request, pathname);
     }
+    // localstorage模式下没有用户名，无法检查封禁状态，直接通过
     return NextResponse.next();
   }
 
@@ -49,8 +51,37 @@ export async function middleware(request: NextRequest) {
       process.env.PASSWORD || ''
     );
 
-    // 签名验证通过即可
+    // 签名验证通过后，检查用户是否被封禁
     if (isValidSignature) {
+      // 检查用户封禁状态
+      try {
+        const storage = getStorage();
+        const isBanned = await storage.getUserBanned(authInfo.username);
+        
+        if (isBanned) {
+          // 用户被封禁，返回403状态
+          if (pathname.startsWith('/api')) {
+            return new NextResponse(
+              JSON.stringify({ error: '您的账户已被封禁，请联系管理员' }), 
+              { 
+                status: 403,
+                headers: { 'Content-Type': 'application/json' }
+              }
+            );
+          } else {
+            // 非API路由，重定向到登录页面并显示封禁信息
+            const loginUrl = new URL('/login', request.url);
+            loginUrl.searchParams.set('error', 'banned');
+            loginUrl.searchParams.set('message', '您的账户已被封禁，请联系管理员');
+            return NextResponse.redirect(loginUrl);
+          }
+        }
+      } catch (error) {
+        console.error('检查用户封禁状态失败:', error);
+        // 如果检查失败，为了安全起见，允许用户继续访问
+        // 避免因为数据库问题导致所有用户无法访问
+      }
+      
       return NextResponse.next();
     }
   }

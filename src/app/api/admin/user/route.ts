@@ -83,10 +83,18 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // 获取用户封禁状态
+    let banned = false;
+    try {
+      banned = await storage.getUserBanned(targetUsername);
+    } catch (error) {
+      console.error('获取用户封禁状态失败:', error);
+    }
+
     return NextResponse.json({
       username: targetUsername,
       role: targetUserRole,
-      banned: false, // TODO: 需要在数据库中添加 banned 字段支持
+      banned: banned,
       expires_at: expiryTime,
     });
   } catch (error) {
@@ -269,11 +277,17 @@ export async function POST(request: NextRequest) {
               );
             }
           }
-          // TODO: 需要在数据库中实现 banned 字段支持
-          return NextResponse.json(
-            { error: 'banned 功能暂未实现' },
-            { status: 501 }
-          );
+          // 检查用户是否已被封禁
+          const isAlreadyBanned = await storage.getUserBanned(targetUsername!);
+          if (isAlreadyBanned) {
+            return NextResponse.json(
+              { error: '用户已被封禁' },
+              { status: 400 }
+            );
+          }
+          // 封禁用户
+          await storage.setUserBanned(targetUsername!, true);
+          break;
         }
         case 'unban': {
           if (!targetUserExists) {
@@ -290,11 +304,17 @@ export async function POST(request: NextRequest) {
               );
             }
           }
-          // TODO: 需要在数据库中实现 banned 字段支持
-          return NextResponse.json(
-            { error: 'banned 功能暂未实现' },
-            { status: 501 }
-          );
+          // 检查用户是否已被封禁
+          const isBanned = await storage.getUserBanned(targetUsername!);
+          if (!isBanned) {
+            return NextResponse.json(
+              { error: '用户未被封禁' },
+              { status: 400 }
+            );
+          }
+          // 解封用户
+          await storage.setUserBanned(targetUsername!, false);
+          break;
         }
         case 'setAdmin': {
           if (!targetUserExists) {

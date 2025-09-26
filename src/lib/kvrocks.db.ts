@@ -385,6 +385,26 @@ export class KvrocksStorage implements IStorage {
     );
   }
 
+  // ---------- 用户封禁状态 ----------
+  private userBannedKey(user: string) {
+    return `u:${user}:banned`; // u:username:banned
+  }
+
+  // 获取用户封禁状态
+  async getUserBanned(userName: string): Promise<boolean> {
+    const banned = await withRetry(() =>
+      this.client.get(this.userBannedKey(userName))
+    );
+    return banned === 'true';
+  }
+
+  // 设置用户封禁状态
+  async setUserBanned(userName: string, banned: boolean): Promise<void> {
+    await withRetry(() =>
+      this.client.set(this.userBannedKey(userName), banned.toString())
+    );
+  }
+
   // ---------- 管理员配置 ----------
   private adminConfigKey() {
     return 'admin_config';

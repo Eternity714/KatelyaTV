@@ -98,6 +98,10 @@ export interface IStorage {
   getUserRole(userName: string): Promise<string | null>;
   // 设置用户角色
   setUserRole(userName: string, role: string): Promise<void>;
+  // 获取用户封禁状态
+  getUserBanned(userName: string): Promise<boolean>;
+  // 设置用户封禁状态
+  setUserBanned(userName: string, banned: boolean): Promise<void>;
 
   // 用户设置相关
   getUserSettings(userName: string): Promise<UserSettings | null>;
