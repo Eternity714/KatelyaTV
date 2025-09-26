@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
 
     // 获取用户信息
     const authHeader = request.headers.get('Authorization');
-    const userName = authHeader?.replace('Bearer ', '') || searchParams.get('userName');
+    const userName = authHeader?.replace('Bearer ', '') || searchParams.get('userName') || undefined;
     const includeAdult = searchParams.get('include_adult') === 'true';
 
     // 检查缓存
