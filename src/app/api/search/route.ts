@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
 import { getFilteredApiSites } from '@/lib/config';
+import { handleOptionsRequest } from '@/lib/cors';
 import { searchFromApi } from '@/lib/downstream';
 import { SearchResult } from '@/lib/types';
 
@@ -33,7 +35,7 @@ function getCacheKey(query: string, userName?: string, includeAdult?: boolean): 
 // 限制并发请求数量
 async function searchWithConcurrencyLimit<T>(
   tasks: (() => Promise<T>)[],
-  limit: number = 3
+  limit = 3
 ): Promise<T[]> {
   const results: T[] = [];
   const executing: Promise<void>[] = [];
@@ -41,9 +43,8 @@ async function searchWithConcurrencyLimit<T>(
   for (const task of tasks) {
     const promise = task().then(result => {
       results.push(result);
-    }).catch(error => {
-      console.error('搜索任务失败:', error);
-      // 返回空结果而不是抛出错误
+    }).catch(() => {
+      // 静默处理搜索任务失败，返回空结果而不是抛出错误
       results.push([] as unknown as T);
     });
 
@@ -165,8 +166,8 @@ export async function GET(request: NextRequest) {
       },
     });
 
-  } catch (error) {
-    console.error('搜索失败:', error);
+  } catch {
+    // 静默处理搜索失败
     return NextResponse.json({
       regular_results: [],
       adult_results: [],
