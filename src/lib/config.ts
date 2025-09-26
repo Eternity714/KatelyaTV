@@ -93,14 +93,35 @@ async function initConfig() {
         const existedUsers = new Set(
           (adminConfig.UserConfig.Users || []).map((u) => u.username)
         );
-        userNames.forEach((uname) => {
+        
+        // 为新用户获取角色和到期时间信息
+        for (const uname of userNames) {
           if (!existedUsers.has(uname)) {
+            let userRole = 'user';
+            let expiresAt: string | null = null;
+            
+            try {
+              // 获取用户角色
+              if (storage && typeof (storage as any).getUserRole === 'function') {
+                const role = await (storage as any).getUserRole(uname);
+                if (role) userRole = role;
+              }
+              
+              // 获取用户到期时间
+              if (storage && typeof (storage as any).getUserExpiryTime === 'function') {
+                expiresAt = await (storage as any).getUserExpiryTime(uname);
+              }
+            } catch (e) {
+              console.error(`获取用户 ${uname} 的角色和到期时间失败:`, e);
+            }
+            
             adminConfig!.UserConfig.Users.push({
               username: uname,
-              role: 'user',
+              role: userRole as 'user' | 'vip' | 'admin' | 'owner',
+              expires_at: expiresAt,
             });
           }
-        });
+        }
         // 站长
         const ownerUser = process.env.USERNAME;
         if (ownerUser) {
@@ -110,20 +131,46 @@ async function initConfig() {
           adminConfig!.UserConfig.Users.unshift({
             username: ownerUser,
             role: 'owner',
+            expires_at: null, // 站长用户永不过期
           });
         }
       } else {
         // 数据库中没有配置，创建新的管理员配置
-        let allUsers = userNames.map((uname) => ({
-          username: uname,
-          role: 'user',
-        }));
+        let allUsers = [];
+        
+        // 为所有用户获取角色和到期时间信息
+        for (const uname of userNames) {
+          let userRole = 'user';
+          let expiresAt: string | null = null;
+          
+          try {
+            // 获取用户角色
+            if (storage && typeof (storage as any).getUserRole === 'function') {
+              const role = await (storage as any).getUserRole(uname);
+              if (role) userRole = role;
+            }
+            
+            // 获取用户到期时间
+            if (storage && typeof (storage as any).getUserExpiryTime === 'function') {
+              expiresAt = await (storage as any).getUserExpiryTime(uname);
+            }
+          } catch (e) {
+            console.error(`获取用户 ${uname} 的角色和到期时间失败:`, e);
+          }
+          
+          allUsers.push({
+            username: uname,
+            role: userRole as 'user' | 'vip' | 'admin' | 'owner',
+            expires_at: expiresAt,
+          });
+        }
         const ownerUser = process.env.USERNAME;
         if (ownerUser) {
           allUsers = allUsers.filter((u) => u.username !== ownerUser);
           allUsers.unshift({
             username: ownerUser,
             role: 'owner',
+            expires_at: null, // 站长用户永不过期
           });
         }
         adminConfig = {
@@ -271,18 +318,59 @@ export async function getConfig(): Promise<AdminConfig> {
       }
     }
 
-    // 合并用户列表 - 将数据库中的用户添加到配置中
+    // 合并用户列表 - 将数据库中的用户添加到配置中，并获取实际的角色和到期时间
     const existedUsers = new Set(
       (adminConfig.UserConfig.Users || []).map((u) => u.username)
     );
-    userNames.forEach((uname) => {
+    
+    // 为新用户获取角色和到期时间信息
+    for (const uname of userNames) {
       if (!existedUsers.has(uname)) {
+        let userRole = 'user';
+        let expiresAt: string | null = null;
+        
+        try {
+          // 获取用户角色
+          if (storage && typeof (storage as any).getUserRole === 'function') {
+            const role = await (storage as any).getUserRole(uname);
+            if (role) userRole = role;
+          }
+          
+          // 获取用户到期时间
+          if (storage && typeof (storage as any).getUserExpiryTime === 'function') {
+            expiresAt = await (storage as any).getUserExpiryTime(uname);
+          }
+        } catch (e) {
+          console.error(`获取用户 ${uname} 的角色和到期时间失败:`, e);
+        }
+        
         adminConfig!.UserConfig.Users.push({
           username: uname,
-          role: 'user',
+          role: userRole as 'user' | 'vip' | 'admin' | 'owner',
+          expires_at: expiresAt,
         });
       }
-    });
+    }
+    
+    // 更新现有用户的角色和到期时间信息
+    for (const user of adminConfig.UserConfig.Users) {
+      if (user.username !== process.env.USERNAME) { // 跳过站长用户
+        try {
+          // 获取用户角色
+          if (storage && typeof (storage as any).getUserRole === 'function') {
+            const role = await (storage as any).getUserRole(user.username);
+            if (role) user.role = role as 'user' | 'vip' | 'admin' | 'owner';
+          }
+          
+          // 获取用户到期时间
+          if (storage && typeof (storage as any).getUserExpiryTime === 'function') {
+            user.expires_at = await (storage as any).getUserExpiryTime(user.username);
+          }
+        } catch (e) {
+          console.error(`更新用户 ${user.username} 的角色和到期时间失败:`, e);
+        }
+      }
+    }
 
     // 合并一些环境变量配置
     adminConfig.SiteConfig.SiteName = process.env.SITE_NAME || 'KatelyaTV';
