@@ -1038,6 +1038,7 @@ const VideoSourceConfig = ({
       
       if (failed_count === 0) {
         // 全部删除成功
+        Swal.close(); // 关闭"正在删除..."弹框
         showSuccess(`成功删除 ${success_count} 个视频源`);
         setSelectedSources(new Set()); // 清空选择
         setBatchMode(false); // 退出批量模式
@@ -1101,6 +1102,7 @@ const VideoSourceConfig = ({
 
       // 显示删除结果
       if (errorCount === 0) {
+        Swal.close(); // 关闭"正在删除..."弹框
         showSuccess(`成功删除 ${successCount} 个视频源`);
         setSelectedSources(new Set());
         setBatchMode(false);
