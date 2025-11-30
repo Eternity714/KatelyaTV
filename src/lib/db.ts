@@ -2,7 +2,9 @@
 
 import { AdminConfig } from './admin.types';
 import { D1Storage } from './d1.db';
+import { KvrocksStorage } from './kvrocks.db';
 import { LocalStorage } from './localstorage.db';
+import { RedisStorage } from './redis.db';
 import { Favorite, IStorage, PlayRecord } from './types';
 import { UpstashRedisStorage } from './upstash.db';
 
@@ -20,9 +22,9 @@ const STORAGE_TYPE =
 function createStorage(): IStorage {
   switch (STORAGE_TYPE) {
     case 'redis':
-      throw new Error('Edge runtime 不支持 Node Redis 客户端，请改用 upstash 或切换到 nodejs runtime');
+      return new RedisStorage();
     case 'kvrocks':
-      throw new Error('Edge runtime 不支持 Kvrocks 客户端，请改用 upstash 或切换到 nodejs runtime');
+      return new KvrocksStorage();
     case 'upstash':
       return new UpstashRedisStorage();
     case 'd1':
