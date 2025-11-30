@@ -206,41 +206,50 @@ function PlayPageClient() {
   ): Promise<SearchResult> => {
     if (sources.length === 1) return sources[0];
 
-    // 将播放源均分为两批，并发测速各批，避免一次性过多请求
-    const batchSize = Math.ceil(sources.length / 2);
+    const maxTest = Math.min(5, sources.length);
+    const candidates = sources.slice(0, maxTest);
+
+    const getCacheKey = (s: SearchResult) => `${s.source}-${s.id}`;
+    const readCache = (key: string) => {
+      try {
+        const raw = localStorage.getItem(`m3u8_info_${key}`);
+        if (!raw) return null;
+        const obj = JSON.parse(raw);
+        const ttl = 60 * 60 * 1000;
+        if (Date.now() - obj.ts > ttl) return null;
+        return obj.data as { quality: string; loadSpeed: string; pingTime: number };
+      } catch (_) {
+        return null;
+      }
+    };
+    const writeCache = (key: string, data: { quality: string; loadSpeed: string; pingTime: number }) => {
+      try {
+        localStorage.setItem(
+          `m3u8_info_${key}`,
+          JSON.stringify({ ts: Date.now(), data })
+        );
+      } catch (_) {}
+    };
+
     const allResults: Array<{
       source: SearchResult;
       testResult: { quality: string; loadSpeed: string; pingTime: number };
-    } | null> = [];
-
-    for (let start = 0; start < sources.length; start += batchSize) {
-      const batchSources = sources.slice(start, start + batchSize);
-      const batchResults = await Promise.all(
-        batchSources.map(async (source) => {
-          try {
-            // 检查是否有第一集的播放地址
-            if (!source.episodes || source.episodes.length === 0) {
-              console.warn(`播放源 ${source.source_name} 没有可用的播放地址`);
-              return null;
-            }
-
-            const episodeUrl =
-              source.episodes.length > 1
-                ? source.episodes[1]
-                : source.episodes[0];
-            const testResult = await getVideoResolutionFromM3u8(episodeUrl);
-
-            return {
-              source,
-              testResult,
-            };
-          } catch (error) {
-            return null;
-          }
-        })
-      );
-      allResults.push(...batchResults);
-    }
+    } | null> = await Promise.all(
+      candidates.map(async (source) => {
+        try {
+          if (!source.episodes || source.episodes.length === 0) return null;
+          const key = getCacheKey(source);
+          const cached = readCache(key);
+          if (cached) return { source, testResult: cached };
+          const episodeUrl = source.episodes.length > 1 ? source.episodes[1] : source.episodes[0];
+          const testResult = await getVideoResolutionFromM3u8(episodeUrl);
+          writeCache(key, testResult);
+          return { source, testResult };
+        } catch (_) {
+          return null;
+        }
+      })
+    );
 
     // 等待所有测速完成，包含成功和失败的结果
     // 保存所有测速结果到 precomputedVideoInfo，供 EpisodeSelector 使用（包含错误结果）
@@ -254,7 +263,7 @@ function PlayPageClient() {
       }
     >();
     allResults.forEach((result, index) => {
-      const source = sources[index];
+      const source = candidates[index];
       const sourceKey = `${source.source}-${source.id}`;
 
       if (result) {
@@ -572,22 +581,15 @@ function PlayPageClient() {
         return;
       }
       setLoading(true);
-      setLoadingStage(currentSource && currentId ? 'fetching' : 'searching');
-      setLoadingMessage(
-        currentSource && currentId
-          ? '🎬 正在获取视频详情...'
-          : '🔍 正在搜索播放源...'
-      );
-
-      let sourcesInfo = await fetchSourcesData(searchTitle || videoTitle);
-      if (
-        currentSource &&
-        currentId &&
-        !sourcesInfo.some(
-          (source) => source.source === currentSource && source.id === currentId
-        )
-      ) {
+      let sourcesInfo: SearchResult[] = [];
+      if (currentSource && currentId) {
+        setLoadingStage('fetching');
+        setLoadingMessage('🎬 正在获取视频详情...');
         sourcesInfo = await fetchSourceDetail(currentSource, currentId);
+      } else {
+        setLoadingStage('searching');
+        setLoadingMessage('🔍 正在搜索播放源...');
+        sourcesInfo = await fetchSourcesData(searchTitle || videoTitle);
       }
       if (sourcesInfo.length === 0) {
         setError('未找到匹配结果');
@@ -649,7 +651,7 @@ function PlayPageClient() {
       // 短暂延迟让用户看到完成状态
       setTimeout(() => {
         setLoading(false);
-      }, 1000);
+      }, 300);
     };
 
     initAll();
