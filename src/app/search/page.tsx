@@ -4,7 +4,7 @@
 import { ChevronUp, Clock, Loader2, Search, TrendingUp, X } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 import {
@@ -52,7 +52,7 @@ function useAuth() {
   return { user };
 }
 
-export default function SearchPage() {
+function SearchContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user } = useAuth();
@@ -556,5 +556,13 @@ export default function SearchPage() {
         </button>
       </div>
     </PageLayout>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<div className="container mx-auto px-4 py-8 text-gray-500 dark:text-gray-400">加载中...</div>}>
+      <SearchContent />
+    </Suspense>
   );
 }
