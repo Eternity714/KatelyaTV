@@ -27,19 +27,16 @@ const VERSION_CHECK_URLS = [
  */
 export async function checkForUpdates(): Promise<UpdateStatus> {
   try {
-    // 尝试从主要URL获取版本信息
-    const primaryVersion = await fetchVersionFromUrl(VERSION_CHECK_URLS[0]);
-    if (primaryVersion) {
-      return compareVersions(primaryVersion);
+    // 优先使用后端代理接口，避免前端跨域与网络阻断
+    const viaApi = await fetchVersionFromApi();
+    if (viaApi) return compareVersions(viaApi);
+
+    // 后端失败时再直接请求远程URL（多源兜底）
+    for (const url of VERSION_CHECK_URLS) {
+      const v = await fetchVersionFromUrl(url);
+      if (v) return compareVersions(v);
     }
 
-    // 如果主要URL失败，尝试备用URL
-    const backupVersion = await fetchVersionFromUrl(VERSION_CHECK_URLS[1]);
-    if (backupVersion) {
-      return compareVersions(backupVersion);
-    }
-
-    // 如果两个URL都失败，返回获取失败状态
     return UpdateStatus.FETCH_FAILED;
   } catch (error) {
     console.error('版本检查失败:', error);
@@ -55,7 +52,7 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
 async function fetchVersionFromUrl(url: string): Promise<string | null> {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
+    const timeoutId = setTimeout(() => controller.abort(), 4000); // 4秒超时
 
     const response = await fetch(url, {
       method: 'GET',
@@ -75,6 +72,21 @@ async function fetchVersionFromUrl(url: string): Promise<string | null> {
     return version.trim();
   } catch (error) {
     console.warn(`从 ${url} 获取版本信息失败:`, error);
+    return null;
+  }
+}
+
+async function fetchVersionFromApi(): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const resp = await fetch('/api/version', { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    const v = (json?.version ?? '').trim();
+    return v || null;
+  } catch (err) {
     return null;
   }
 }
