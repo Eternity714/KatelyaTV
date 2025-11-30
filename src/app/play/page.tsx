@@ -1462,9 +1462,9 @@ function PlayPageClient() {
       const handleFullscreenChange = () => {
         const isFullscreen = !!(
           document.fullscreenElement ||
-          document.webkitFullscreenElement ||
-          document.mozFullScreenElement ||
-          document.msFullscreenElement
+          (document as any).webkitFullscreenElement ||
+          (document as any).mozFullScreenElement ||
+          (document as any).msFullscreenElement
         );
         
         if (!isFullscreen && artPlayerRef.current) {
@@ -1502,9 +1502,9 @@ function PlayPageClient() {
       const handleFullscreenChange = () => {
         const isFullscreen = !!(
           document.fullscreenElement ||
-          document.webkitFullscreenElement ||
-          document.mozFullScreenElement ||
-          document.msFullscreenElement
+          (document as any).webkitFullscreenElement ||
+          (document as any).mozFullScreenElement ||
+          (document as any).msFullscreenElement
         );
         
         if (!isFullscreen && artPlayerRef.current) {
