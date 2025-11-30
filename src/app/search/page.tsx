@@ -91,7 +91,7 @@ export default function SearchPage() {
     const loadHistory = async () => {
       if (user) {
         try {
-          const history = await getSearchHistory(user.username);
+          const history = await getSearchHistory();
           setSearchHistory(history);
         } catch (error) {
           // 静默处理错误
@@ -198,9 +198,9 @@ export default function SearchPage() {
       // 添加到搜索历史
       if (user && searchResults.length > 0) {
         try {
-          await addSearchHistory(user.username, searchQuery);
+          await addSearchHistory(searchQuery);
           // 重新加载搜索历史
-          const updatedHistory = await getSearchHistory(user.username);
+          const updatedHistory = await getSearchHistory();
           setSearchHistory(updatedHistory);
         } catch (error) {
           // 静默处理错误
@@ -264,8 +264,8 @@ export default function SearchPage() {
   const handleDeleteHistory = useCallback(async (historyItem: string) => {
     if (user) {
       try {
-        await deleteSearchHistory(user.username, historyItem);
-        const updatedHistory = await getSearchHistory(user.username);
+        await deleteSearchHistory(historyItem);
+        const updatedHistory = await getSearchHistory();
         setSearchHistory(updatedHistory);
       } catch (error) {
         // 静默处理错误
@@ -277,7 +277,7 @@ export default function SearchPage() {
   const handleClearHistory = useCallback(async () => {
     if (user) {
       try {
-        await clearSearchHistory(user.username);
+        await clearSearchHistory();
         setSearchHistory([]);
       } catch (error) {
         // 静默处理错误
