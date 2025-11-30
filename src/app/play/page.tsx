@@ -228,7 +228,9 @@ function PlayPageClient() {
           `m3u8_info_${key}`,
           JSON.stringify({ ts: Date.now(), data })
         );
-      } catch (_) {}
+      } catch (_) {
+        return;
+      }
     };
 
     const allResults: Array<{
