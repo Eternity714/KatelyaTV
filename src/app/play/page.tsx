@@ -263,7 +263,7 @@ function PlayPageClient() {
       }
     };
 
-    const allResults: Array<{
+    const allResults: Array<{ 
       source: SearchResult;
       testResult: { quality: string; loadSpeed: string; pingTime: number };
     } | null> = await Promise.all(
