@@ -37,16 +37,18 @@ const isMobileDevice = () => {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 };
 
-// 检查是否支持全屏API
+// 检查是否支持全屏API（包含 iOS Safari 的 webkitEnterFullscreen）
 const supportsFullscreen = () => {
   const video = document.createElement('video') as HTMLVideoElement & {
     webkitRequestFullscreen?: () => Promise<void>;
+    webkitEnterFullscreen?: () => void;
     mozRequestFullScreen?: () => Promise<void>;
     msRequestFullscreen?: () => Promise<void>;
   };
   return !!(
     video.requestFullscreen ||
     video.webkitRequestFullscreen ||
+    video.webkitEnterFullscreen ||
     video.mozRequestFullScreen ||
     video.msRequestFullscreen
   );
@@ -1125,8 +1127,8 @@ function PlayPageClient() {
         playbackRate: true,
         aspectRatio: false,
         fullscreen: true,
-        // 优化移动端全屏配置 - iOS Safari兼容性
-        fullscreenWeb: typeof window !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent) ? false : true,
+        // 优化移动端全屏配置 - iOS Safari 统一启用 Web 全屏兜底
+        fullscreenWeb: true,
         subtitleOffset: false,
         miniProgressBar: false,
         mutex: true,
@@ -1262,28 +1264,42 @@ function PlayPageClient() {
                 const video = artPlayerRef.current.video;
                 
                 if (supportsFullscreen()) {
-                  // 尝试原生全屏API（按优先级）
+                  // 优先使用标准全屏API，其次使用 iOS 的 webkitEnterFullscreen
                   if (video.requestFullscreen) {
                     video.requestFullscreen().catch(() => {
-                      // 失败时使用播放器自带全屏
-                      artPlayerRef.current.fullscreen = !artPlayerRef.current.fullscreen;
+                      // 失败兜底：切换 Web 全屏
+                      artPlayerRef.current.fullscreenWeb = !artPlayerRef.current.fullscreenWeb;
                     });
-                  } else if (video.webkitRequestFullscreen) {
-                    video.webkitRequestFullscreen().catch(() => {
-                      artPlayerRef.current.fullscreen = !artPlayerRef.current.fullscreen;
-                    });
-                  } else if (video.mozRequestFullScreen) {
-                    video.mozRequestFullScreen().catch(() => {
-                      artPlayerRef.current.fullscreen = !artPlayerRef.current.fullscreen;
-                    });
-                  } else if (video.msRequestFullscreen) {
-                    video.msRequestFullscreen().catch(() => {
-                      artPlayerRef.current.fullscreen = !artPlayerRef.current.fullscreen;
-                    });
+                  } else if ((video as any).webkitEnterFullscreen) {
+                    try {
+                      (video as any).webkitEnterFullscreen();
+                    } catch (_) {
+                      artPlayerRef.current.fullscreenWeb = !artPlayerRef.current.fullscreenWeb;
+                    }
+                  } else if ((video as any).webkitRequestFullscreen) {
+                    try {
+                      (video as any).webkitRequestFullscreen();
+                    } catch (_) {
+                      artPlayerRef.current.fullscreenWeb = !artPlayerRef.current.fullscreenWeb;
+                    }
+                  } else if ((video as any).mozRequestFullScreen) {
+                    try {
+                      (video as any).mozRequestFullScreen();
+                    } catch (_) {
+                      artPlayerRef.current.fullscreenWeb = !artPlayerRef.current.fullscreenWeb;
+                    }
+                  } else if ((video as any).msRequestFullscreen) {
+                    try {
+                      (video as any).msRequestFullscreen();
+                    } catch (_) {
+                      artPlayerRef.current.fullscreenWeb = !artPlayerRef.current.fullscreenWeb;
+                    }
+                  } else {
+                    artPlayerRef.current.fullscreenWeb = !artPlayerRef.current.fullscreenWeb;
                   }
                 } else {
-                  // 不支持原生全屏时，使用播放器自带全屏
-                  artPlayerRef.current.fullscreen = !artPlayerRef.current.fullscreen;
+                  // 不支持原生全屏：直接使用 Web 全屏
+                  artPlayerRef.current.fullscreenWeb = !artPlayerRef.current.fullscreenWeb;
                 }
                 
                 // 移动端尝试锁定横屏
@@ -1293,7 +1309,7 @@ function PlayPageClient() {
                   });
                 }
               } else {
-                // 桌面端使用播放器默认全屏
+                // 桌面端使用浏览器原生全屏
                 artPlayerRef.current.fullscreen = !artPlayerRef.current.fullscreen;
               }
             },
@@ -1417,6 +1433,25 @@ function PlayPageClient() {
           }
         } else if (isMobile && !isFullscreen) {
           // 移动端退出全屏时移除特殊样式类
+          if (artPlayerRef.current?.template?.$player) {
+            artPlayerRef.current.template.$player.classList.remove('mobile-fullscreen-active');
+          }
+        }
+      });
+
+      // 监听 Web 全屏状态变化（iOS 等不支持原生 API 的兜底）
+      artPlayerRef.current.on('fullscreenWeb', (isFullscreen: boolean) => {
+        const isMobile = isMobileDevice();
+        if (isMobile && isFullscreen) {
+          if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('landscape').catch(() => {
+              console.log('无法锁定屏幕方向');
+            });
+          }
+          if (artPlayerRef.current?.template?.$player) {
+            artPlayerRef.current.template.$player.classList.add('mobile-fullscreen-active');
+          }
+        } else if (isMobile && !isFullscreen) {
           if (artPlayerRef.current?.template?.$player) {
             artPlayerRef.current.template.$player.classList.remove('mobile-fullscreen-active');
           }
