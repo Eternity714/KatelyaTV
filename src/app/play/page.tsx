@@ -206,8 +206,24 @@ function PlayPageClient() {
   ): Promise<SearchResult> => {
     if (sources.length === 1) return sources[0];
 
-    const maxTest = Math.min(5, sources.length);
-    const candidates = sources.slice(0, maxTest);
+    const SOURCE_PRIORITY_WHITE_LIST: string[] = [];
+    const userPriority = (() => {
+      try {
+        const raw = localStorage.getItem('stable_sources');
+        if (!raw) return [] as string[];
+        return raw.split(',').map((s) => s.trim()).filter(Boolean);
+      } catch (_) {
+        return [] as string[];
+      }
+    })();
+    const combinedPriority = new Set<string>([...SOURCE_PRIORITY_WHITE_LIST, ...userPriority]);
+    const sortedSources = [...sources].sort((a, b) => {
+      const ap = combinedPriority.has(a.source) || combinedPriority.has(a.source_name);
+      const bp = combinedPriority.has(b.source) || combinedPriority.has(b.source_name);
+      return ap === bp ? 0 : ap ? -1 : 1;
+    });
+    const maxTest = Math.min(5, sortedSources.length);
+    const candidates = sortedSources.slice(0, maxTest);
 
     const getCacheKey = (s: SearchResult) => `${s.source}-${s.id}`;
     const readCache = (key: string) => {
@@ -215,9 +231,23 @@ function PlayPageClient() {
         const raw = localStorage.getItem(`m3u8_info_${key}`);
         if (!raw) return null;
         const obj = JSON.parse(raw);
-        const ttl = 60 * 60 * 1000;
-        if (Date.now() - obj.ts > ttl) return null;
-        return obj.data as { quality: string; loadSpeed: string; pingTime: number };
+        const age = Date.now() - obj.ts;
+        const ttl = 48 * 60 * 60 * 1000;
+        if (age > ttl) return null;
+        const data = obj.data as { quality: string; loadSpeed: string; pingTime: number };
+        const hours = Math.max(0, Math.floor(age / (60 * 60 * 1000)));
+        const m = String(data.loadSpeed).match(/^([\d.]+)\s*(KB\/s|MB\/s)$/);
+        let value = 0;
+        let unit = 'KB/s';
+        if (m) {
+          value = parseFloat(m[1]);
+          unit = m[2];
+        }
+        const decay = Math.max(0.6, 1 - Math.min(0.4, (hours / 72) * 0.4));
+        if (value > 0) value = value * decay;
+        const loadSpeed = unit === 'MB/s' ? `${value.toFixed(1)} MB/s` : `${value.toFixed(1)} KB/s`;
+        const pingTime = Math.min(2000, data.pingTime + Math.min(200, hours * 2));
+        return { quality: data.quality, loadSpeed, pingTime };
       } catch (_) {
         return null;
       }
@@ -244,7 +274,13 @@ function PlayPageClient() {
           const cached = readCache(key);
           if (cached) return { source, testResult: cached };
           const episodeUrl = source.episodes.length > 1 ? source.episodes[1] : source.episodes[0];
-          const testResult = await getVideoResolutionFromM3u8(episodeUrl);
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 2500);
+          const resp = await fetch(`/api/m3u8info?url=${encodeURIComponent(episodeUrl)}`, { signal: controller.signal });
+          clearTimeout(timer);
+          if (!resp.ok) return null;
+          const api = await resp.json();
+          const testResult = { quality: api.quality as string, loadSpeed: api.loadSpeed as string, pingTime: api.pingTime as number };
           writeCache(key, testResult);
           return { source, testResult };
         } catch (_) {
@@ -446,6 +482,34 @@ function PlayPageClient() {
     // 如果曾经有禁用属性，移除之
     if (video.hasAttribute('disableRemotePlayback')) {
       video.removeAttribute('disableRemotePlayback');
+    }
+  };
+
+  const cleanupM3u8Cache = () => {
+    try {
+      if (typeof window === 'undefined') return;
+      const prefix = 'm3u8_info_';
+      const ttl = 7 * 24 * 60 * 60 * 1000;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(prefix)) {
+          const raw = localStorage.getItem(key);
+          if (!raw) {
+            localStorage.removeItem(key);
+            continue;
+          }
+          try {
+            const obj = JSON.parse(raw);
+            if (!obj || !obj.ts || Date.now() - obj.ts > ttl) {
+              localStorage.removeItem(key);
+            }
+          } catch (_) {
+            localStorage.removeItem(key);
+          }
+        }
+      }
+    } catch (_) {
+      return;
     }
   };
 
@@ -976,6 +1040,7 @@ function PlayPageClient() {
 
   // 清理定时器
   useEffect(() => {
+    cleanupM3u8Cache();
     return () => {
       if (saveIntervalRef.current) {
         clearInterval(saveIntervalRef.current);
