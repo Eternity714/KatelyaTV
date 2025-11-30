@@ -44,7 +44,7 @@ function useAuth() {
 
   useEffect(() => {
     const authInfo = getAuthInfoFromBrowserCookie();
-    if (authInfo) {
+    if (authInfo && authInfo.username) {
       setUser({ username: authInfo.username });
     }
   }, []);
