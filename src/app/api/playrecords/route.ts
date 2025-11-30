@@ -20,10 +20,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(records, { status: 200 });
   } catch (err) {
     console.error('获取播放记录失败', err);
-    return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
-    );
+    console.warn('GET /api/playrecords 失败，返回空对象以避免前端崩溃');
+    return NextResponse.json({}, { status: 200 });
   }
 }
 

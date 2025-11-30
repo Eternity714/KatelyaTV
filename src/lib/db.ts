@@ -20,15 +20,27 @@ const STORAGE_TYPE =
 
 // 创建存储实例
 function createStorage(): IStorage {
+  // 运行时安全回退：在 Edge 环境或未配置后端时避免抛错
+  const hasD1 = !!(process.env as any).DB;
+  const hasUpstash = !!process.env.UPSTASH_URL && !!process.env.UPSTASH_TOKEN;
+
   switch (STORAGE_TYPE) {
     case 'redis':
       return new RedisStorage();
     case 'kvrocks':
       return new KvrocksStorage();
     case 'upstash':
-      return new UpstashRedisStorage();
+      if (hasUpstash) return new UpstashRedisStorage();
+      console.warn('Upstash 未配置，回退到 LocalStorage');
+      return new LocalStorage();
     case 'd1':
-      return new D1Storage();
+      if (hasD1) return new D1Storage();
+      if (hasUpstash) {
+        console.warn('D1 未配置，回退到 Upstash');
+        return new UpstashRedisStorage();
+      }
+      console.warn('D1 未配置，回退到 LocalStorage');
+      return new LocalStorage();
     case 'localstorage':
     default:
       // 使用 LocalStorage 实现，适用于本地开发和简单部署
